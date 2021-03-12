@@ -84,6 +84,8 @@ class Parser:
             self.result = self.tokenizer.actual.value
             self.tokenizer.select_next()
 
+            if self.tokenizer.actual.type_ == Type.INT: raise_error("double int encountered")
+            
             while (self.tokenizer.actual.type_ == Type.PLUS or self.tokenizer.actual.type_ == Type.SUB or 
             self.tokenizer.actual.type_ == Type.DIV or self.tokenizer.actual.type_ == Type.MULT):
                 self.apply_operation(Type.PLUS, self.apply_sum)
