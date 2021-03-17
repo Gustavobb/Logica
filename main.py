@@ -130,7 +130,7 @@ class Parser:
         self.term_value *= self.tokenizer.actual.value
 
     def apply_division(self): 
-        self.term_value /= self.tokenizer.actual.value
+        self.term_value = int(self.term_value/self.tokenizer.actual.value)
 
     def apply_sub(self): 
         self.result -= self.term_value
