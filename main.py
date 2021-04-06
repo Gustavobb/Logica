@@ -1,18 +1,18 @@
 # macielcalebe
-import sys
-import re
 from enum import Enum
+import sys
 
-types = ["INT", "PLUS", "SUB", "DIV", "MULT","EOF"]
+types = ["INT", "PLUS", "SUB", "DIV", "MULT", "EOF"]
 
 class Type(Enum):
+
     INT = 1
     PLUS = 2
     SUB = 3
     DIV = 4
     MULT = 5
-    SPARENTESIS = 6
-    EPARENTESIS = 7
+    SPARENTHESIS = 6
+    EPARENTHESIS = 7
     EOF = 8
 
 class Token:
@@ -20,6 +20,51 @@ class Token:
     def __init__(self, type_: Type, value: int):
         self.type_ = type_
         self.value = value
+
+class Node:
+
+    def __init__(self, token: Token, n_children: int):
+        self.token = token
+        self.children = [NoOp() for i in range(n_children)]
+        
+    def evaluate(self): pass
+
+class BinOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 2)
+    
+    def evaluate(self): 
+        r = 0
+        if self.token.type_ == Type.PLUS: 
+            r = self.children[0].evaluate() + self.children[1].evaluate()
+        elif self.token.type_ == Type.SUB: 
+            r = self.children[0].evaluate() - self.children[1].evaluate()
+        elif self.token.type_ == Type.DIV: 
+            r = int(self.children[0].evaluate() / self.children[1].evaluate())
+        elif self.token.type_ == Type.MULT: 
+            r = int(self.children[0].evaluate() * self.children[1].evaluate())
+
+        return r
+
+class UnOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 1)
+    
+    def evaluate(self): return self.token.value * self.children[0].evaluate()
+
+class IntVal(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self): return self.token.value
+
+class NoOp(Node):
+
+    def __init__(self):
+        super().__init__(None, 0)
 
 class Tokenizer:
 
@@ -63,10 +108,10 @@ class Tokenizer:
             token = Token(Type.INT, int(int_))
 
         elif tmp == '+': 
-            token = Token(Type.PLUS, None)
+            token = Token(Type.PLUS, 1)
 
         elif tmp == '-': 
-            token = Token(Type.SUB, None)
+            token = Token(Type.SUB, -1)
 
         elif tmp == '*': 
             token = Token(Type.MULT, None)
@@ -75,10 +120,10 @@ class Tokenizer:
             token = Token(Type.DIV, None)
         
         elif tmp == ')': 
-            token = Token(Type.EPARENTESIS, None)
+            token = Token(Type.EPARENTHESIS, None)
         
         elif tmp == '(': 
-            token = Token(Type.SPARENTESIS, None)
+            token = Token(Type.SPARENTHESIS, None)
 
         else:
             raise_error("not found operation")
@@ -92,78 +137,66 @@ class Parser:
         self.tokenizer = None
 
     def parse_expression(self) -> int:
-        result = self.term()
+        tree = self.term()
 
         while (self.tokenizer.actual.type_ == Type.PLUS or self.tokenizer.actual.type_ == Type.SUB):
-            result = self.apply_operation(Type.PLUS, self.apply_sum, result)
-            result = self.apply_operation(Type.SUB, self.apply_sub, result)
-            
-        return result
-
-    def apply_operation(self, token_type: Type, func, result: int) -> int:
-        if self.tokenizer.actual.type_ == token_type:
+            tmp = tree
+            tree = BinOp(self.tokenizer.actual)
+            tree.children[0] = tmp
             self.tokenizer.select_next()
-            return func(result)
-        
-        return result
+            tree.children[1] = self.term()
+            
+        return tree
 
-    def factor(self):
+    def apply_operation(self, token_type: Type, tree: Node) -> Node:
+        
+        
+        return tree
+
+    def factor(self) -> Node:
         if self.tokenizer.actual.type_ == Type.INT:
-            tmp = self.tokenizer.actual.value
+            node = IntVal(self.tokenizer.actual)
             self.tokenizer.select_next()
-            return tmp
+            return node
 
-        elif self.tokenizer.actual.type_ == Type.PLUS:
+        elif self.tokenizer.actual.type_ == Type.PLUS or self.tokenizer.actual.type_ == Type.SUB:
+            node = UnOp(self.tokenizer.actual)
             self.tokenizer.select_next()
-            return self.factor()
-            
-        elif self.tokenizer.actual.type_ == Type.SUB:
-            self.tokenizer.select_next()
-            return -self.factor()
+            node.children[0] = self.factor()
+            return node
         
-        elif self.tokenizer.actual.type_ == Type.SPARENTESIS:
+        elif self.tokenizer.actual.type_ == Type.SPARENTHESIS:
             self.tokenizer.select_next()
-            result_tmp = self.parse_expression()
+            tree = self.parse_expression()
 
-            if self.tokenizer.actual.type_ == Type.EPARENTESIS: 
+            if self.tokenizer.actual.type_ == Type.EPARENTHESIS: 
                 self.tokenizer.select_next()
-                return result_tmp
+                return tree
 
-            else: raise_error("parentesis not closed")
+            else: raise_error("parenthesis not closed")
 
     def term(self):
-        term_value = self.factor()
+        tree = self.factor()
         if self.tokenizer.actual.type_ == Type.INT: raise_error("double int encountered")
-
+        
         while (self.tokenizer.actual.type_ == Type.MULT or self.tokenizer.actual.type_ == Type.DIV):
-            tmp = self.tokenizer.actual.type_
+            tmp = tree
+            tree = BinOp(self.tokenizer.actual)
+            tree.children[0] = tmp
             self.tokenizer.select_next()
             
             if self.tokenizer.actual.type_ == Type.MULT or self.tokenizer.actual.type_ == Type.DIV: 
                 raise_error("double operation encountered")
             
-            if tmp == Type.MULT: term_value = self.apply_multiplication(term_value) 
-            else: term_value = self.apply_division(term_value)
+            tree.children[1] = self.factor()
 
-        return term_value
-
-    def apply_multiplication(self, term_value: int): 
-        return term_value * self.factor()
-
-    def apply_division(self, term_value: int): 
-        return int(term_value/self.factor())
-
-    def apply_sub(self, result: int):
-        return result - self.term()
-
-    def apply_sum(self, result: int): 
-        return result + self.term()
+        return tree
 
     def code(self, code: str) -> int:
         self.tokenizer = Tokenizer(code)
-        result = self.parse_expression()
-        if self.tokenizer.actual.type_ != Type.EOF: raise_error("not initialized parentesis")
-        return result
+        tree = self.parse_expression()
+        if self.tokenizer.actual.type_ != Type.EOF: raise_error("not initialized parenthesis")
+        return tree
 
 class PrePro:
 
@@ -193,8 +226,9 @@ def raise_error(error: str):
     raise ValueError(error)
 
 def main(argv: str) -> int:
-    parser = Parser()
-    print(parser.code(PrePro().filter(argv)))
+    f = open(argv, "r").read()
+    tree = Parser().code(PrePro().filter(f))
+    print(tree.evaluate())
     return 0
 
 if __name__ == "__main__":
