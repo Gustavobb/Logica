@@ -14,57 +14,16 @@ class Type(Enum):
     SPARENTHESIS = 6
     EPARENTHESIS = 7
     EOF = 8
+    EOL = 9
+    ATR = 10
+    PRINTLN = 11
+    IDENTIFIER = 12
 
 class Token:
 
     def __init__(self, type_: Type, value: int):
         self.type_ = type_
         self.value = value
-
-class Node:
-
-    def __init__(self, token: Token, n_children: int):
-        self.token = token
-        self.children = [NoOp() for i in range(n_children)]
-        
-    def evaluate(self): pass
-
-class BinOp(Node):
-
-    def __init__(self, token: Token):
-        super().__init__(token, 2)
-    
-    def evaluate(self): 
-        r = 0
-        if self.token.type_ == Type.PLUS: 
-            r = self.children[0].evaluate() + self.children[1].evaluate()
-        elif self.token.type_ == Type.SUB: 
-            r = self.children[0].evaluate() - self.children[1].evaluate()
-        elif self.token.type_ == Type.DIV: 
-            r = int(self.children[0].evaluate() / self.children[1].evaluate())
-        elif self.token.type_ == Type.MULT: 
-            r = int(self.children[0].evaluate() * self.children[1].evaluate())
-
-        return r
-
-class UnOp(Node):
-
-    def __init__(self, token: Token):
-        super().__init__(token, 1)
-    
-    def evaluate(self): return self.token.value * self.children[0].evaluate()
-
-class IntVal(Node):
-
-    def __init__(self, token: Token):
-        super().__init__(token, 0)
-    
-    def evaluate(self): return self.token.value
-
-class NoOp(Node):
-
-    def __init__(self):
-        super().__init__(None, 0)
 
 class Tokenizer:
 
@@ -82,9 +41,9 @@ class Tokenizer:
             return
 
         tmp = self.origin[self.position]
-    
-        if tmp == ' ': 
-            while (tmp == ' '):
+
+        if tmp == ' ' or tmp == '\n': 
+            while (tmp == ' ' or tmp == '\n'):
                 self.position += 1
 
                 if self.position == len(self.origin):
@@ -106,6 +65,31 @@ class Tokenizer:
         
             self.position -= 1
             token = Token(Type.INT, int(int_))
+        
+        elif tmp.isalpha():
+            str_ = ''
+            while (True):
+                if len(self.origin) > self.position and (self.origin[self.position].isnumeric() or self.origin[self.position].isalpha() or self.origin[self.position] == "_"):
+                    str_ += self.origin[self.position]
+                    self.position += 1
+                    continue
+                
+                else:
+                    if str_ == "println":
+                        token = Token(Type.PRINTLN, None)
+                        break
+                        
+                    else: 
+                        token = Token(Type.IDENTIFIER, str_)
+                        break
+            
+            self.position -= 1
+
+        elif tmp == "=":
+            token = Token(Type.ATR, None)
+        
+        elif tmp == ";":
+            token = Token(Type.EOL, None)
 
         elif tmp == '+': 
             token = Token(Type.PLUS, 1)
@@ -131,6 +115,87 @@ class Tokenizer:
         self.actual = token
         self.position += 1
 
+class SymbolTable:
+
+    def __init__(self):
+        self.dict = {}
+
+    def _get(self, var_name: str) -> int:
+        if var_name in self.dict: return self.dict[var_name]
+        raise_error("key not found")
+
+    def _set(self, var_name: str, var_value: int):
+        self.dict[var_name] = var_value
+
+class Node:
+
+    def __init__(self, token: Token, n_children: int):
+        self.token = token
+        self.children = [NoOp() for i in range(n_children)]
+        
+    def evaluate(self, st: SymbolTable): pass
+
+class BinOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 2)
+    
+    def evaluate(self, st: SymbolTable): 
+        r = 0
+        if self.token.type_ == Type.PLUS: 
+            r = self.children[0].evaluate(st) + self.children[1].evaluate(st)
+        elif self.token.type_ == Type.SUB: 
+            r = self.children[0].evaluate(st) - self.children[1].evaluate(st)
+        elif self.token.type_ == Type.DIV: 
+            r = int(self.children[0].evaluate(st) / self.children[1].evaluate(st))
+        elif self.token.type_ == Type.MULT: 
+            r = int(self.children[0].evaluate(st) * self.children[1].evaluate(st))
+
+        return r
+
+class AtrOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 2)
+    
+    def evaluate(self, st: SymbolTable): 
+        st._set(self.children[0].token.value, self.children[1].evaluate(st))
+
+class UnOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 1)
+    
+    def evaluate(self, st: SymbolTable): return self.token.value * self.children[0].evaluate(st)
+
+class PrintOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 1)
+    
+    def evaluate(self, st: SymbolTable): print(self.children[0].evaluate(st))
+
+class IntVal(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable): return self.token.value
+
+class IdentVal(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable): return st._get(self.token.value)
+
+class NoOp(Node):
+
+    def __init__(self):
+        super().__init__(None, 0)
+    
+    def evaluate(self, st: SymbolTable): return 
+
 class Parser:
 
     def __init__(self):
@@ -145,11 +210,6 @@ class Parser:
             tree.children[0] = tmp
             self.tokenizer.select_next()
             tree.children[1] = self.term()
-            
-        return tree
-
-    def apply_operation(self, token_type: Type, tree: Node) -> Node:
-        
         
         return tree
 
@@ -161,7 +221,29 @@ class Parser:
 
         elif self.tokenizer.actual.type_ == Type.PLUS or self.tokenizer.actual.type_ == Type.SUB:
             node = UnOp(self.tokenizer.actual)
+            self.tokenizer.select_next() 
+            node.children[0] = self.factor()
+            return node
+        
+        elif self.tokenizer.actual.type_ == Type.IDENTIFIER:
+            node = IdentVal(self.tokenizer.actual)
+            
             self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ == Type.ATR:
+                tmp = node
+                node = AtrOp(self.tokenizer.actual)
+                node.children[0] = tmp
+                self.tokenizer.select_next()
+                node.children[1] = self.parse_expression()
+            
+            if self.tokenizer.actual.type_ == Type.INT: raise_error("operator not found")
+            
+            return node
+        
+        elif self.tokenizer.actual.type_ == Type.PRINTLN:
+            node = PrintOp(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("println is a reserved word")
             node.children[0] = self.factor()
             return node
         
@@ -192,11 +274,21 @@ class Parser:
 
         return tree
 
+    def block(self, code: str):
+        trees = []
+
+        while (self.tokenizer.actual.type_ != Type.EOF):
+            node = self.parse_expression()
+            if not node: node = NoOp()
+            trees += [node]
+            if self.tokenizer.actual.type_ != Type.EOF and self.tokenizer.actual.type_ != Type.EOL: raise_error("not closed sintax")
+            self.tokenizer.select_next()
+        
+        return trees
+
     def code(self, code: str) -> int:
         self.tokenizer = Tokenizer(code)
-        tree = self.parse_expression()
-        if self.tokenizer.actual.type_ != Type.EOF: raise_error("not initialized parenthesis")
-        return tree
+        return self.block(code)
 
 class PrePro:
 
@@ -226,9 +318,9 @@ def raise_error(error: str):
     raise ValueError(error)
 
 def main(argv: str) -> int:
-    f = open(argv, "r").read()
-    tree = Parser().code(PrePro().filter(f))
-    print(tree.evaluate())
+    trees = Parser().code(PrePro().filter(open(argv, "r").read()))
+    st = SymbolTable()
+    for tree in trees: tree.evaluate(st)
     return 0
 
 if __name__ == "__main__":
