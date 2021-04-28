@@ -281,7 +281,7 @@ class Parser:
             node = self.parse_expression()
             if not node: node = NoOp()
             trees += [node]
-            if self.tokenizer.actual.type_ != Type.EOF and self.tokenizer.actual.type_ != Type.EOL: raise_error("not closed sintax")
+            if self.tokenizer.actual.type_ != Type.EOL: raise_error("not closed sintax")
             self.tokenizer.select_next()
         
         return trees
