@@ -18,6 +18,18 @@ class Type(Enum):
     ATR = 10
     PRINTLN = 11
     IDENTIFIER = 12
+    READLN = 13
+    GT = 14
+    LT = 15
+    ET = 16
+    OR = 17
+    AND = 18
+    NEG = 19
+    IF = 20
+    ELSE = 21
+    WHILE = 22
+    SKEY = 23
+    EKEY = 24
 
 class Token:
 
@@ -78,6 +90,22 @@ class Tokenizer:
                     if str_ == "println":
                         token = Token(Type.PRINTLN, None)
                         break
+                    
+                    elif str_ == "readln":
+                        token = Token(Type.READLN, None)
+                        break
+                        
+                    elif str_ == "while":
+                        token = Token(Type.WHILE, None)
+                        break
+
+                    elif str_ == "if":
+                        token = Token(Type.IF, None)
+                        break
+                        
+                    elif str_ == "else":
+                        token = Token(Type.ELSE, None)
+                        break
                         
                     else: 
                         token = Token(Type.IDENTIFIER, str_)
@@ -87,6 +115,10 @@ class Tokenizer:
 
         elif tmp == "=":
             token = Token(Type.ATR, None)
+
+            if self.origin[self.position + 1] == "=":
+                token = Token(Type.ET, None)
+                self.position += 1
         
         elif tmp == ";":
             token = Token(Type.EOL, None)
@@ -108,6 +140,29 @@ class Tokenizer:
         
         elif tmp == '(': 
             token = Token(Type.SPARENTHESIS, None)
+        
+        elif tmp == '>': 
+            token = Token(Type.GT, None)
+        
+        elif tmp == '<': 
+            token = Token(Type.LT, None)
+
+        elif tmp == '|' and self.origin[self.position + 1] == '|': 
+            token = Token(Type.OR, None)
+            self.position += 1
+        
+        elif tmp == '&' and self.origin[self.position + 1] == '&': 
+            token = Token(Type.AND, None)
+            self.position += 1
+        
+        elif tmp == '!': 
+            token = Token(Type.NEG, None)
+        
+        elif tmp == '}': 
+            token = Token(Type.EKEY, None)
+        
+        elif tmp == '{': 
+            token = Token(Type.SKEY, None)
 
         else:
             raise_error("not found operation")
@@ -150,6 +205,16 @@ class BinOp(Node):
             r = int(self.children[0].evaluate(st) / self.children[1].evaluate(st))
         elif self.token.type_ == Type.MULT: 
             r = int(self.children[0].evaluate(st) * self.children[1].evaluate(st))
+        elif self.token.type_ == Type.GT: 
+            r = self.children[0].evaluate(st) > self.children[1].evaluate(st)
+        elif self.token.type_ == Type.LT: 
+            r = self.children[0].evaluate(st) < self.children[1].evaluate(st)
+        elif self.token.type_ == Type.ET: 
+            r = self.children[0].evaluate(st) == self.children[1].evaluate(st)
+        elif self.token.type_ == Type.AND: 
+            r = self.children[0].evaluate(st) and self.children[1].evaluate(st)
+        elif self.token.type_ == Type.OR: 
+            r = self.children[0].evaluate(st) or self.children[1].evaluate(st)
 
         return r
 
@@ -168,6 +233,13 @@ class UnOp(Node):
     
     def evaluate(self, st: SymbolTable): return self.token.value * self.children[0].evaluate(st)
 
+class NotOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 1)
+    
+    def evaluate(self, st: SymbolTable): return not self.children[0].evaluate(st)
+
 class PrintOp(Node):
 
     def __init__(self, token: Token):
@@ -175,12 +247,39 @@ class PrintOp(Node):
     
     def evaluate(self, st: SymbolTable): print(self.children[0].evaluate(st))
 
+class ReadlnOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 1)
+    
+    def evaluate(self, st: SymbolTable): return int(input())
+
 class IntVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
     def evaluate(self, st: SymbolTable): return self.token.value
+
+class WhileOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 2)
+    
+    def evaluate(self, st: SymbolTable): 
+        while(self.children[0].evaluate(st)): self.children[1].evaluate(st)
+
+class CondOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 3)
+    
+    def evaluate(self, st: SymbolTable): 
+        cond = self.children[0].evaluate(st)
+        if cond: self.children[1].evaluate(st)
+        if self.children[2] != None:
+            if not cond: self.children[2].evaluate(st)
+
 
 class IdentVal(Node):
 
@@ -195,6 +294,14 @@ class NoOp(Node):
         super().__init__(None, 0)
     
     def evaluate(self, st: SymbolTable): return 
+
+class Block():
+    def __init__(self, tree: list):
+        self.tree = tree
+
+    def evaluate(self, st: SymbolTable):
+        for tree in self.tree: 
+            tree.evaluate(st)
 
 class Parser:
 
@@ -225,31 +332,29 @@ class Parser:
             node.children[0] = self.factor()
             return node
         
+        elif self.tokenizer.actual.type_ == Type.NEG:
+            node = NotOp(self.tokenizer.actual)
+            self.tokenizer.select_next() 
+            node.children[0] = self.factor()
+            return node
+
         elif self.tokenizer.actual.type_ == Type.IDENTIFIER:
             node = IdentVal(self.tokenizer.actual)
-            
             self.tokenizer.select_next()
-            if self.tokenizer.actual.type_ == Type.ATR:
-                tmp = node
-                node = AtrOp(self.tokenizer.actual)
-                node.children[0] = tmp
-                self.tokenizer.select_next()
-                node.children[1] = self.parse_expression()
-            
-            if self.tokenizer.actual.type_ == Type.INT: raise_error("operator not found")
-            
             return node
-        
-        elif self.tokenizer.actual.type_ == Type.PRINTLN:
-            node = PrintOp(self.tokenizer.actual)
+
+        elif self.tokenizer.actual.type_ == Type.READLN:
+            node = ReadlnOp(self.tokenizer.actual)
             self.tokenizer.select_next()
-            if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("println is a reserved word")
-            node.children[0] = self.factor()
+            if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("readln is a reserved word")
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("not closed parenthesis")
+            self.tokenizer.select_next()
             return node
         
         elif self.tokenizer.actual.type_ == Type.SPARENTHESIS:
             self.tokenizer.select_next()
-            tree = self.parse_expression()
+            tree = self.orexpr()
 
             if self.tokenizer.actual.type_ == Type.EPARENTHESIS: 
                 self.tokenizer.select_next()
@@ -273,22 +378,159 @@ class Parser:
             tree.children[1] = self.factor()
 
         return tree
+    
+    def relexpr(self):
+        tree = self.parse_expression()
 
-    def block(self, code: str):
+        if (self.tokenizer.actual.type_ == Type.GT or self.tokenizer.actual.type_ == Type.LT):
+            tmp = tree
+            tree = BinOp(self.tokenizer.actual)
+            tree.children[0] = tmp
+            self.tokenizer.select_next()
+            if (self.tokenizer.actual.type_ == Type.GT or self.tokenizer.actual.type_ == Type.LT): raise_error("double relexpr")
+            tree.children[1] = self.parse_expression()
+            
+            while (self.tokenizer.actual.type_ == Type.GT or self.tokenizer.actual.type_ == Type.LT):
+                tmp2 = tree
+                tree = BinOp(self.tokenizer.actual)
+                tree.children[0] = tmp2
+                self.tokenizer.select_next()
+                tree.children[1] = self.parse_expression()
+
+        return tree
+
+    def eqexpr(self):
+        tree = self.relexpr()
+
+        if (self.tokenizer.actual.type_ == Type.ET):
+            tmp = tree
+            tree = BinOp(self.tokenizer.actual)
+            tree.children[0] = tmp
+            self.tokenizer.select_next()
+
+            if (self.tokenizer.actual.type_ == Type.ET): raise_error("double eqexpr")
+            tree.children[1] = self.relexpr()
+
+            while (self.tokenizer.actual.type_ == Type.ET):
+                tmp2 = tree
+                tree = BinOp(self.tokenizer.actual)
+                tree.children[0] = tmp2
+                self.tokenizer.select_next()
+                tree.children[1] = self.relexpr()
+        
+        return tree
+
+    def andexpr(self):
+        tree = self.eqexpr()
+
+        if (self.tokenizer.actual.type_ == Type.AND):
+            tmp = tree
+            tree = BinOp(self.tokenizer.actual)
+            tree.children[0] = tmp
+            self.tokenizer.select_next()
+
+            if (self.tokenizer.actual.type_ == Type.AND): raise_error("double and")
+            tree.children[1] = self.eqexpr()
+
+            while (self.tokenizer.actual.type_ == Type.AND):
+                tmp2 = tree
+                tree = BinOp(self.tokenizer.actual)
+                tree.children[0] = tmp2
+                self.tokenizer.select_next()
+                tree.children[1] = self.eqexpr()
+        
+        return tree
+
+    def orexpr(self):
+        tree = self.andexpr()
+
+        if (self.tokenizer.actual.type_ == Type.OR):
+            tmp = tree
+            tree = BinOp(self.tokenizer.actual)
+            tree.children[0] = tmp
+            self.tokenizer.select_next()
+
+            if (self.tokenizer.actual.type_ == Type.OR): raise_error("double orexpr")
+            tree.children[1] = self.andexpr()
+
+            while (self.tokenizer.actual.type_ == Type.OR):
+                tmp2 = tree
+                tree = BinOp(self.tokenizer.actual)
+                tree.children[0] = tmp2
+                self.tokenizer.select_next()
+                tree.children[1] = self.andexpr()
+        
+        return tree
+    
+    def command(self):
+        if self.tokenizer.actual.type_ == Type.IDENTIFIER:
+            node = IdentVal(self.tokenizer.actual)
+            self.tokenizer.select_next()
+
+            if self.tokenizer.actual.type_ == Type.ATR:
+                tmp = node
+                node = AtrOp(self.tokenizer.actual)
+                node.children[0] = tmp
+                self.tokenizer.select_next()
+                node.children[1] = self.orexpr()
+            
+            if self.tokenizer.actual.type_ == Type.INT: raise_error("operator not found")
+
+            return node
+        
+        elif self.tokenizer.actual.type_ == Type.PRINTLN:
+            node = PrintOp(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("println is a reserved word")
+            node.children[0] = self.orexpr()
+            return node
+
+        elif self.tokenizer.actual.type_ == Type.SKEY: 
+            return self.block()
+        
+        elif self.tokenizer.actual.type_ == Type.WHILE:
+            node = WhileOp(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("while is a reserved word")
+            node.children[0] = self.orexpr()  
+            node.children[1] = self.command()
+            return node
+        
+        elif self.tokenizer.actual.type_ == Type.IF:
+            node = CondOp(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("if is a reserved word")
+            node.children[0] = self.orexpr()
+            node.children[1] = self.command()
+            self.tokenizer.select_next()
+
+            # fixme
+            if self.tokenizer.actual.type_ == Type.ELSE:      
+                self.tokenizer.select_next()     
+                node.children[2] = self.command()
+                                    
+            return node
+    
+        elif self.tokenizer.actual.type_ != Type.EOL: 
+            print(self.tokenizer.actual.type_ )
+            raise_error("not closed sintax")
+
+    def block(self):
         trees = []
+        self.tokenizer.select_next()
 
-        while (self.tokenizer.actual.type_ != Type.EOF):
-            node = self.parse_expression()
+        while (self.tokenizer.actual.type_ != Type.EKEY and self.tokenizer.actual.type_ != Type.EOF):
+            node = self.command()
             if not node: node = NoOp()
             trees += [node]
-            if self.tokenizer.actual.type_ != Type.EOL: raise_error("not closed sintax")
             self.tokenizer.select_next()
-        
-        return trees
+            
+        return Block(trees)
 
     def code(self, code: str) -> int:
         self.tokenizer = Tokenizer(code)
-        return self.block(code)
+        if not self.tokenizer.actual.type_ == Type.SKEY: raise_error("not initialized keys")
+        return self.block()
 
 class PrePro:
 
@@ -320,7 +562,7 @@ def raise_error(error: str):
 def main(argv: str) -> int:
     trees = Parser().code(PrePro().filter(open(argv, "r").read()))
     st = SymbolTable()
-    for tree in trees: tree.evaluate(st)
+    trees.evaluate(st)
     return 0
 
 if __name__ == "__main__":
