@@ -459,7 +459,7 @@ class Parser:
                 tree.children[0] = tmp2
                 self.tokenizer.select_next()
                 tree.children[1] = self.andexpr()
-        
+
         return tree
     
     def command(self):
@@ -472,9 +472,11 @@ class Parser:
                 node = AtrOp(self.tokenizer.actual)
                 node.children[0] = tmp
                 self.tokenizer.select_next()
-                node.children[1] = self.orexpr()
-            
+                node.children[1] = self.orexpr()   
+
             if self.tokenizer.actual.type_ == Type.INT: raise_error("operator not found")
+            if self.tokenizer.actual.type_ == Type.EOL: self.tokenizer.select_next()
+            else: raise_error("not closed sintax")
 
             return node
         
@@ -483,6 +485,8 @@ class Parser:
             self.tokenizer.select_next()
             if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("println is a reserved word")
             node.children[0] = self.orexpr()
+            if self.tokenizer.actual.type_ == Type.EOL: self.tokenizer.select_next()
+            else: raise_error("not closed sintax")
             return node
 
         elif self.tokenizer.actual.type_ == Type.SKEY: 
@@ -502,34 +506,35 @@ class Parser:
             if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("if is a reserved word")
             node.children[0] = self.orexpr()
             node.children[1] = self.command()
-            self.tokenizer.select_next()
-
-            # fixme
+            
             if self.tokenizer.actual.type_ == Type.ELSE:      
                 self.tokenizer.select_next()     
                 node.children[2] = self.command()
                                     
             return node
     
-        elif self.tokenizer.actual.type_ != Type.EOL: 
-            print(self.tokenizer.actual.type_ )
+        elif self.tokenizer.actual.type_ == Type.EOL: 
+            self.tokenizer.select_next()
+
+        else: 
+            # print(self.tokenizer.actual.type_)
             raise_error("not closed sintax")
 
     def block(self):
         trees = []
+        if not self.tokenizer.actual.type_ == Type.SKEY: raise_error("not initialized keys")
         self.tokenizer.select_next()
-
         while (self.tokenizer.actual.type_ != Type.EKEY and self.tokenizer.actual.type_ != Type.EOF):
             node = self.command()
             if not node: node = NoOp()
             trees += [node]
-            self.tokenizer.select_next()
-            
+        
+        if self.tokenizer.actual.type_ == Type.EKEY: self.tokenizer.select_next()
+        
         return Block(trees)
 
     def code(self, code: str) -> int:
         self.tokenizer = Tokenizer(code)
-        if not self.tokenizer.actual.type_ == Type.SKEY: raise_error("not initialized keys")
         return self.block()
 
 class PrePro:
