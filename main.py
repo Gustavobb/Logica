@@ -207,7 +207,7 @@ class SymbolTable:
 
     def _get(self, var_name: str) -> int:
         if var_name in self.dict: return self.dict[var_name]["value"], self.dict[var_name]["type"]
-        raise_error("key not found")
+        return None
 
     def _set(self, var_name: str, var_value: int, var_type: Type):
         if not var_name in self.dict:
@@ -216,7 +216,6 @@ class SymbolTable:
             self.dict[var_name]["type"] = var_type
         
         else:
-            if var_type != None: raise_error("double definition of types")
             if self.dict[var_name]["type"] != var_type: 
                 if var_type == Type.STR or self.dict[var_name]["type"] == Type.STR: raise_error("not compatible types")
 
@@ -245,10 +244,10 @@ class BinOp(Node):
         if (eval1[1] == Type.STR or eval2[1] == Type.STR) and self.token.type_ != Type.ET: raise_error("incompatible types")
 
         if self.token.type_ == Type.PLUS: 
-            return eval1[0] + eval2[1], Type.INT
+            return eval1[0] + eval2[0], Type.INT
 
         elif self.token.type_ == Type.SUB: 
-            return eval1[0] - eval2[1], Type.INT
+            return eval1[0] - eval2[0], Type.INT
 
         elif self.token.type_ == Type.DIV: 
             return int(eval1[0] / eval2[0]), Type.INT
@@ -278,7 +277,7 @@ class AtrOp(Node):
     
     def evaluate(self, st: SymbolTable): 
         node = self.children[1].evaluate(st)
-        st._set(self.children[0].token.value, node[0], None)
+        st._set(self.children[0].token.value, node[0], node[1])
 
 class UnOp(Node):
 
@@ -314,7 +313,7 @@ class ReadlnOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): return int(input())
+    def evaluate(self, st: SymbolTable): return int(input()), Type.INT
 
 class IntVal(Node):
 
@@ -346,7 +345,8 @@ class TypeVal(Node):
         elif self.token.type_ == Type.STRDEF: type_ = Type.STR
         elif self.token.type_ == Type.BOOLDEF: type_ = Type.BOOL
 
-        st._set(self.children[0].value, None, type_)
+        if not st._get(self.token.value): st._set(self.children[0].value, None, type_)
+        else: raise_error("double definition of variable")
 
 class WhileOp(Node):
 
@@ -354,7 +354,8 @@ class WhileOp(Node):
         super().__init__(token, 2)
     
     def evaluate(self, st: SymbolTable): 
-        while(self.children[0].evaluate(st)[0]): self.children[1].evaluate(st)[0]
+        while(self.children[0].evaluate(st)[0]): 
+            self.children[1].evaluate(st)
 
 class CondOp(Node):
 
@@ -363,16 +364,19 @@ class CondOp(Node):
     
     def evaluate(self, st: SymbolTable): 
         cond = self.children[0].evaluate(st)[0]
-        if cond: self.children[1].evaluate(st)[0]
-        if self.children[2] != None:
-            if not cond: self.children[2].evaluate(st)[0]
+        if cond: self.children[1].evaluate(st)
+        if type(self.children[2]) != NoOp:
+            if not cond: self.children[2].evaluate(st)
 
 class IdentVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable): return st._get(self.token.value)
+    def evaluate(self, st: SymbolTable): 
+        r = st._get(self.token.value)
+        if not r: raise_error("key not found")
+        return r
 
 class NoOp(Node):
 
