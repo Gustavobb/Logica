@@ -2,8 +2,6 @@
 from enum import Enum
 import sys
 
-types = ["INT", "PLUS", "SUB", "DIV", "MULT", "EOF"]
-
 class Type(Enum):
 
     INT = 1
@@ -30,6 +28,11 @@ class Type(Enum):
     WHILE = 22
     SKEY = 23
     EKEY = 24
+    BOOLDEF = 25
+    INTDEF = 26
+    STRDEF = 27
+    BOOL = 28
+    STR = 29
 
 class Token:
 
@@ -53,7 +56,7 @@ class Tokenizer:
             return
 
         tmp = self.origin[self.position]
-
+        
         if tmp == ' ' or tmp == '\n': 
             while (tmp == ' ' or tmp == '\n'):
                 self.position += 1
@@ -78,8 +81,13 @@ class Tokenizer:
             self.position -= 1
             token = Token(Type.INT, int(int_))
         
-        elif tmp.isalpha():
+        elif tmp.isalpha() or tmp == '"':
             str_ = ''
+
+            if tmp == '"': 
+                str_ += '"'
+                self.position += 1
+
             while (True):
                 if len(self.origin) > self.position and (self.origin[self.position].isnumeric() or self.origin[self.position].isalpha() or self.origin[self.position] == "_"):
                     str_ += self.origin[self.position]
@@ -91,6 +99,12 @@ class Tokenizer:
                         token = Token(Type.PRINTLN, None)
                         break
                     
+                    elif str_[0] == '"':
+                        str_ += self.origin[self.position]
+                        self.position += 1
+                        token = Token(Type.STR, str_)
+                        break
+
                     elif str_ == "readln":
                         token = Token(Type.READLN, None)
                         break
@@ -105,6 +119,22 @@ class Tokenizer:
                         
                     elif str_ == "else":
                         token = Token(Type.ELSE, None)
+                        break
+                
+                    elif str_ == "bool":
+                        token = Token(Type.BOOLDEF, None)
+                        break
+                        
+                    elif str_ == "string":
+                        token = Token(Type.STRDEF, None)
+                        break
+                    
+                    elif str_ == "int":
+                        token = Token(Type.INTDEF, None)
+                        break
+                
+                    elif str_ == "true" or str_ == "false":
+                        token = Token(Type.BOOL, str_)
                         break
                         
                     else: 
@@ -176,11 +206,24 @@ class SymbolTable:
         self.dict = {}
 
     def _get(self, var_name: str) -> int:
-        if var_name in self.dict: return self.dict[var_name]
+        if var_name in self.dict: return self.dict[var_name]["value"], self.dict[var_name]["type"]
         raise_error("key not found")
 
-    def _set(self, var_name: str, var_value: int):
-        self.dict[var_name] = var_value
+    def _set(self, var_name: str, var_value: int, var_type: Type):
+        if not var_name in self.dict:
+            if var_value != None: raise_error("not initialized var")
+            self.dict[var_name] = {}
+            self.dict[var_name]["type"] = var_type
+        
+        else:
+            if var_type != None: raise_error("double definition of types")
+            if self.dict[var_name]["type"] != var_type: 
+                if var_type == Type.STR or self.dict[var_name]["type"] == Type.STR: raise_error("not compatible types")
+
+                if var_type == Type.BOOL: var_value = int(var_value)
+                elif var_type == Type.INT: var_value = bool(var_value)
+
+            self.dict[var_name]["value"] = var_value
 
 class Node:
 
@@ -196,27 +239,37 @@ class BinOp(Node):
         super().__init__(token, 2)
     
     def evaluate(self, st: SymbolTable): 
-        r = 0
-        if self.token.type_ == Type.PLUS: 
-            r = self.children[0].evaluate(st) + self.children[1].evaluate(st)
-        elif self.token.type_ == Type.SUB: 
-            r = self.children[0].evaluate(st) - self.children[1].evaluate(st)
-        elif self.token.type_ == Type.DIV: 
-            r = int(self.children[0].evaluate(st) / self.children[1].evaluate(st))
-        elif self.token.type_ == Type.MULT: 
-            r = int(self.children[0].evaluate(st) * self.children[1].evaluate(st))
-        elif self.token.type_ == Type.GT: 
-            r = self.children[0].evaluate(st) > self.children[1].evaluate(st)
-        elif self.token.type_ == Type.LT: 
-            r = self.children[0].evaluate(st) < self.children[1].evaluate(st)
-        elif self.token.type_ == Type.ET: 
-            r = self.children[0].evaluate(st) == self.children[1].evaluate(st)
-        elif self.token.type_ == Type.AND: 
-            r = self.children[0].evaluate(st) and self.children[1].evaluate(st)
-        elif self.token.type_ == Type.OR: 
-            r = self.children[0].evaluate(st) or self.children[1].evaluate(st)
+        eval1 = self.children[0].evaluate(st)
+        eval2 = self.children[1].evaluate(st)
+        
+        if (eval1[1] == Type.STR or eval2[1] == Type.STR) and self.token.type_ != Type.ET: raise_error("incompatible types")
 
-        return r
+        if self.token.type_ == Type.PLUS: 
+            return eval1[0] + eval2[1], Type.INT
+
+        elif self.token.type_ == Type.SUB: 
+            return eval1[0] - eval2[1], Type.INT
+
+        elif self.token.type_ == Type.DIV: 
+            return int(eval1[0] / eval2[0]), Type.INT
+
+        elif self.token.type_ == Type.MULT: 
+            return int(eval1[0] * eval2[0]), Type.INT
+
+        elif self.token.type_ == Type.GT:
+            return bool(eval1[0] > eval2[0]), Type.BOOL
+ 
+        elif self.token.type_ == Type.LT: 
+            return bool(eval1[0] < eval2[0]), Type.BOOL
+
+        elif self.token.type_ == Type.ET: 
+            return bool(eval1[0] == eval2[0]), Type.BOOL
+
+        elif self.token.type_ == Type.AND: 
+            return bool(eval1[0] and eval2[0]), Type.BOOL
+
+        elif self.token.type_ == Type.OR: 
+            return bool(eval1[0] or eval2[0]), Type.BOOL
 
 class AtrOp(Node):
 
@@ -224,28 +277,37 @@ class AtrOp(Node):
         super().__init__(token, 2)
     
     def evaluate(self, st: SymbolTable): 
-        st._set(self.children[0].token.value, self.children[1].evaluate(st))
+        node = self.children[1].evaluate(st)
+        st._set(self.children[0].token.value, node[0], None)
 
 class UnOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): return self.token.value * self.children[0].evaluate(st)
+    def evaluate(self, st: SymbolTable): 
+        node = self.children[0].evaluate(st)
+        return self.token.value * node[0], node[1]
 
 class NotOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): return not self.children[0].evaluate(st)
+    def evaluate(self, st: SymbolTable): 
+        node = self.children[0].evaluate(st)
+        return not node[0], node[1] 
 
 class PrintOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): print(self.children[0].evaluate(st))
+    def evaluate(self, st: SymbolTable): 
+        node = self.children[0].evaluate(st)
+        p = node[0]
+        if node[1] == Type.BOOL: p = "true" if node[0] else "false"
+        print(p)
 
 class ReadlnOp(Node):
 
@@ -259,7 +321,32 @@ class IntVal(Node):
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable): return self.token.value
+    def evaluate(self, st: SymbolTable): return self.token.value, self.token.type_
+
+class StringVal(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable): return self.token.value[1:-1], self.token.type_
+
+class BoolVal(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable): return True if self.token.value == "true" else False, self.token.type_
+
+class TypeVal(Node):
+    def __init__(self, token: Token):
+        super().__init__(token, 1)
+    
+    def evaluate(self, st: SymbolTable): 
+        if self.token.type_ == Type.INTDEF: type_ = Type.INT
+        elif self.token.type_ == Type.STRDEF: type_ = Type.STR
+        elif self.token.type_ == Type.BOOLDEF: type_ = Type.BOOL
+
+        st._set(self.children[0].value, None, type_)
 
 class WhileOp(Node):
 
@@ -267,7 +354,7 @@ class WhileOp(Node):
         super().__init__(token, 2)
     
     def evaluate(self, st: SymbolTable): 
-        while(self.children[0].evaluate(st)): self.children[1].evaluate(st)
+        while(self.children[0].evaluate(st)[0]): self.children[1].evaluate(st)[0]
 
 class CondOp(Node):
 
@@ -275,11 +362,10 @@ class CondOp(Node):
         super().__init__(token, 3)
     
     def evaluate(self, st: SymbolTable): 
-        cond = self.children[0].evaluate(st)
-        if cond: self.children[1].evaluate(st)
+        cond = self.children[0].evaluate(st)[0]
+        if cond: self.children[1].evaluate(st)[0]
         if self.children[2] != None:
-            if not cond: self.children[2].evaluate(st)
-
+            if not cond: self.children[2].evaluate(st)[0]
 
 class IdentVal(Node):
 
@@ -325,10 +411,20 @@ class Parser:
             node = IntVal(self.tokenizer.actual)
             self.tokenizer.select_next()
             return node
+        
+        elif self.tokenizer.actual.type_ == Type.BOOL:
+            node = BoolVal(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            return node
+        
+        elif self.tokenizer.actual.type_ == Type.STR:
+            node = StringVal(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            return node
 
         elif self.tokenizer.actual.type_ == Type.PLUS or self.tokenizer.actual.type_ == Type.SUB:
             node = UnOp(self.tokenizer.actual)
-            self.tokenizer.select_next() 
+            self.tokenizer.select_next()
             node.children[0] = self.factor()
             return node
         
@@ -479,12 +575,22 @@ class Parser:
             else: raise_error("not closed sintax")
 
             return node
-        
+
+        elif self.tokenizer.actual.type_ in [Type.BOOLDEF, Type.INTDEF, Type.STRDEF]:
+            node = TypeVal(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ != Type.IDENTIFIER: raise_error("wrong definition of variable")
+            node.children[0] = self.tokenizer.actual
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ == Type.EOL: self.tokenizer.select_next()
+            else: raise_error("not closed sintax")
+            return node
+
         elif self.tokenizer.actual.type_ == Type.PRINTLN:
             node = PrintOp(self.tokenizer.actual)
             self.tokenizer.select_next()
             if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("println is a reserved word")
-            node.children[0] = self.orexpr()
+            node.children[0] = self.orexpr()    
             if self.tokenizer.actual.type_ == Type.EOL: self.tokenizer.select_next()
             else: raise_error("not closed sintax")
             return node
@@ -517,7 +623,6 @@ class Parser:
             self.tokenizer.select_next()
 
         else: 
-            # print(self.tokenizer.actual.type_)
             raise_error("not closed sintax")
 
     def block(self):

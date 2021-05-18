@@ -1,5 +1,7 @@
 {
-    if (0 >1)
-        println(1);
-    println(0);
+    bool a;
+    
+    a = true;
+    a = !a;
+    println(a);
 }
