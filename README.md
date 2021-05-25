@@ -4,6 +4,9 @@ Basta rodar python3 main.py <string da operacao>
  
 Exemplo: python3 main.py "2+2"
 
+# Status dos testes
+![git status](http://3.129.230.99/svg/Gustavobb/Logica/)
+
 # EBNF: 
 
 BLOCK = "{", { COMMAND }, "}" ; 

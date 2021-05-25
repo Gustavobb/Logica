@@ -57,8 +57,8 @@ class Tokenizer:
 
         tmp = self.origin[self.position]
         
-        if tmp == ' ' or tmp == '\n': 
-            while (tmp == ' ' or tmp == '\n'):
+        if tmp == ' ' or tmp == '\n' or tmp == "\t":
+            while (tmp == ' ' or tmp == '\n' or tmp == "\t"):
                 self.position += 1
 
                 if self.position == len(self.origin):
@@ -83,8 +83,10 @@ class Tokenizer:
         
         elif tmp.isalpha() or tmp == '"':
             str_ = ''
+            is_str = False
 
             if tmp == '"': 
+                is_str = True
                 str_ += '"'
                 self.position += 1
 
@@ -92,8 +94,14 @@ class Tokenizer:
                 if len(self.origin) > self.position and (self.origin[self.position].isnumeric() or self.origin[self.position].isalpha() or self.origin[self.position] == "_"):
                     str_ += self.origin[self.position]
                     self.position += 1
-                    continue
-                
+                    if (self.origin[self.position] == " "):
+                        if (is_str): 
+                            str_ += self.origin[self.position]
+                            self.position += 1
+                            continue
+
+                    else: continue
+
                 else:
                     if str_ == "println":
                         token = Token(Type.PRINTLN, None)
@@ -206,7 +214,10 @@ class SymbolTable:
         self.dict = {}
 
     def _get(self, var_name: str) -> int:
-        if var_name in self.dict: return self.dict[var_name]["value"], self.dict[var_name]["type"]
+        if var_name in self.dict: 
+            try: return self.dict[var_name]["value"], self.dict[var_name]["type"]
+            except: return True
+
         return None
 
     def _set(self, var_name: str, var_value: int, var_type: Type):
@@ -345,7 +356,7 @@ class TypeVal(Node):
         elif self.token.type_ == Type.STRDEF: type_ = Type.STR
         elif self.token.type_ == Type.BOOLDEF: type_ = Type.BOOL
 
-        if not st._get(self.token.value): st._set(self.children[0].value, None, type_)
+        if not st._get(self.children[0].value): st._set(self.children[0].value, None, type_)
         else: raise_error("double definition of variable")
 
 class WhileOp(Node):
@@ -364,6 +375,7 @@ class CondOp(Node):
     
     def evaluate(self, st: SymbolTable): 
         cond = self.children[0].evaluate(st)[0]
+        if type(cond) is str: raise_error("cant have str in if")
         if cond: self.children[1].evaluate(st)
         if type(self.children[2]) != NoOp:
             if not cond: self.children[2].evaluate(st)
@@ -566,7 +578,7 @@ class Parser:
         if self.tokenizer.actual.type_ == Type.IDENTIFIER:
             node = IdentVal(self.tokenizer.actual)
             self.tokenizer.select_next()
-
+            
             if self.tokenizer.actual.type_ == Type.ATR:
                 tmp = node
                 node = AtrOp(self.tokenizer.actual)
@@ -620,7 +632,7 @@ class Parser:
             if self.tokenizer.actual.type_ == Type.ELSE:      
                 self.tokenizer.select_next()     
                 node.children[2] = self.command()
-                                    
+            
             return node
     
         elif self.tokenizer.actual.type_ == Type.EOL: 
