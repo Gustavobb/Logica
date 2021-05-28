@@ -36,9 +36,10 @@ class Type(Enum):
 
 class Token:
 
-    def __init__(self, type_: Type, value: int):
+    def __init__(self, type_: Type, value: int, id_: int):
         self.type_ = type_
         self.value = value
+        self.id_ = id_ 
 
 class Tokenizer:
 
@@ -51,18 +52,18 @@ class Tokenizer:
     def select_next(self) -> Token:
         token = None
         if self.position == len(self.origin):
-            token = Token(Type.EOF, None)
+            token = Token(Type.EOF, None, self.position)
             self.actual = token
             return
 
         tmp = self.origin[self.position]
         
-        if tmp == ' ' or tmp == '\n': 
-            while (tmp == ' ' or tmp == '\n'):
+        if tmp == ' ' or tmp == '\n' or tmp == "\t":
+            while (tmp == ' ' or tmp == '\n' or tmp == "\t"):
                 self.position += 1
 
                 if self.position == len(self.origin):
-                    token = Token(Type.EOF, None)
+                    token = Token(Type.EOF, None, self.position)
                     self.actual = token
                     return
 
@@ -79,12 +80,14 @@ class Tokenizer:
                 break
         
             self.position -= 1
-            token = Token(Type.INT, int(int_))
+            token = Token(Type.INT, int(int_), self.position)
         
         elif tmp.isalpha() or tmp == '"':
             str_ = ''
+            is_str = False
 
             if tmp == '"': 
+                is_str = True
                 str_ += '"'
                 self.position += 1
 
@@ -92,11 +95,17 @@ class Tokenizer:
                 if len(self.origin) > self.position and (self.origin[self.position].isnumeric() or self.origin[self.position].isalpha() or self.origin[self.position] == "_"):
                     str_ += self.origin[self.position]
                     self.position += 1
-                    continue
-                
+                    if (self.origin[self.position] == " "):
+                        if (is_str): 
+                            str_ += self.origin[self.position]
+                            self.position += 1
+                            continue
+
+                    else: continue
+
                 else:
                     if str_ == "println":
-                        token = Token(Type.PRINTLN, None)
+                        token = Token(Type.PRINTLN, None, self.position)
                         break
                     
                     elif str_[0] == '"':
@@ -106,93 +115,93 @@ class Tokenizer:
                         break
 
                     elif str_ == "readln":
-                        token = Token(Type.READLN, None)
+                        token = Token(Type.READLN, None, self.position)
                         break
                         
                     elif str_ == "while":
-                        token = Token(Type.WHILE, None)
+                        token = Token(Type.WHILE, None, self.position)
                         break
 
                     elif str_ == "if":
-                        token = Token(Type.IF, None)
+                        token = Token(Type.IF, None, self.position)
                         break
                         
                     elif str_ == "else":
-                        token = Token(Type.ELSE, None)
+                        token = Token(Type.ELSE, None, self.position)
                         break
                 
                     elif str_ == "bool":
-                        token = Token(Type.BOOLDEF, None)
+                        token = Token(Type.BOOLDEF, None, self.position)
                         break
                         
                     elif str_ == "string":
-                        token = Token(Type.STRDEF, None)
+                        token = Token(Type.STRDEF, None, self.position)
                         break
                     
                     elif str_ == "int":
-                        token = Token(Type.INTDEF, None)
+                        token = Token(Type.INTDEF, None, self.position)
                         break
                 
                     elif str_ == "true" or str_ == "false":
-                        token = Token(Type.BOOL, str_)
+                        token = Token(Type.BOOL, str_, self.position)
                         break
                         
                     else: 
-                        token = Token(Type.IDENTIFIER, str_)
+                        token = Token(Type.IDENTIFIER, str_, self.position)
                         break
             
             self.position -= 1
 
         elif tmp == "=":
-            token = Token(Type.ATR, None)
+            token = Token(Type.ATR, None, self.position)
 
             if self.origin[self.position + 1] == "=":
-                token = Token(Type.ET, None)
+                token = Token(Type.ET, None, self.position)
                 self.position += 1
         
         elif tmp == ";":
-            token = Token(Type.EOL, None)
+            token = Token(Type.EOL, None, self.position)
 
         elif tmp == '+': 
-            token = Token(Type.PLUS, 1)
+            token = Token(Type.PLUS, 1, self.position)
 
         elif tmp == '-': 
-            token = Token(Type.SUB, -1)
+            token = Token(Type.SUB, -1, self.position)
 
         elif tmp == '*': 
-            token = Token(Type.MULT, None)
+            token = Token(Type.MULT, None, self.position)
 
         elif tmp == '/': 
-            token = Token(Type.DIV, None)
+            token = Token(Type.DIV, None, self.position)
         
         elif tmp == ')': 
-            token = Token(Type.EPARENTHESIS, None)
+            token = Token(Type.EPARENTHESIS, None, self.position)
         
         elif tmp == '(': 
-            token = Token(Type.SPARENTHESIS, None)
+            token = Token(Type.SPARENTHESIS, None, self.position)
         
         elif tmp == '>': 
-            token = Token(Type.GT, None)
+            token = Token(Type.GT, None, self.position)
         
         elif tmp == '<': 
-            token = Token(Type.LT, None)
+            token = Token(Type.LT, None, self.position)
 
         elif tmp == '|' and self.origin[self.position + 1] == '|': 
-            token = Token(Type.OR, None)
+            token = Token(Type.OR, None, self.position)
             self.position += 1
         
         elif tmp == '&' and self.origin[self.position + 1] == '&': 
-            token = Token(Type.AND, None)
+            token = Token(Type.AND, None, self.position)
             self.position += 1
         
         elif tmp == '!': 
-            token = Token(Type.NEG, None)
+            token = Token(Type.NEG, None, self.position)
         
         elif tmp == '}': 
-            token = Token(Type.EKEY, None)
+            token = Token(Type.EKEY, None, self.position)
         
         elif tmp == '{': 
-            token = Token(Type.SKEY, None)
+            token = Token(Type.SKEY, None, self.position)
 
         else:
             raise_error("not found operation")
@@ -200,29 +209,109 @@ class Tokenizer:
         self.actual = token
         self.position += 1
 
+class Assembler():
+
+    def __init__(self):
+        self.assembly = open("exemplo.txt", "r").read()
+    
+    def int_val_assembly(self, value: str):
+        self.assembly += f"MOV EBX, {value}" + "\n"
+
+    def push_ebx(self):
+        self.assembly += "PUSH EBX" + "\n"
+    
+    def pop_eax(self):
+        self.assembly += "POP EAX" + "\n"
+    
+    def add_operation_assembly(self):
+        self.assembly += "ADD EAX, EBX \n MOV EBX, EAX " + "\n"
+    
+    def sub_operation_assembly(self):
+        self.assembly += "SUB EAX, EBX \n MOV EBX, EAX " + "\n"
+    
+    def mult_operation_assembly(self):
+        self.assembly += "IMUL EBX \n MOV EBX, EAX " + "\n"
+    
+    def div_operation_assembly(self):
+        self.assembly += "DIV EAX, EBX \n MOV EBX, EAX " + "\n"
+    
+    def def_variable(self):
+        self.assembly += "PUSH DWORD 0" + "\n"
+    
+    def atr_variable(self, position: int):
+        self.assembly += f"MOV [EBP{position}], EBX" + "\n"
+    
+    def cmp_assembly(self):
+        self.assembly += f"CMP EAX, EBX" + "\n"
+    
+    def cmp_while_assembly(self, id_: int):
+        self.assembly += f"CMP EBX, False \n JE EXIT_{id_}" + "\n"
+
+    def je_assembly(self):
+        self.cmp_assembly()
+        self.assembly += "CALL binop_je" + "\n"
+    
+    def jl_assembly(self):
+        self.cmp_assembly()
+        self.assembly += "CALL binop_jl" + "\n"
+    
+    def jg_assembly(self):
+        self.cmp_assembly()
+        self.assembly += "CALL binop_jg" + "\n"
+    
+    def and_assembly(self):
+        self.assembly += "AND EAX, EBX" + "\n"
+    
+    def or_assembly(self):
+        self.assembly += "OR EAX, EBX" + "\n"
+    
+    def neg_assembly(self):
+        self.assembly += "NEG EBX" + "\n"
+    
+    def not_assembly(self):
+        self.assembly += "NOT EBX" + "\n"
+
+    def print_assembly(self):
+        self.assembly += "PUSH EBX \n CALL print \n POP EBX" + "\n"
+
+    def while_assembly(self, id_: int):
+        self.assembly += f"LOOP_{id_}:" + "\n"
+
+    def if_assembly(self, id_: int):
+        self.assembly += f"CMP EBX, True" + "\n"
+        self.assembly += f"JE IF_{id_}" + "\n"
+
+    def label_assembly(self, value: str):
+        self.assembly += f"{value}:" + "\n"
+
+    def jmp_assembly(self, value: str):
+        self.assembly += f"JMP {value}" + "\n"
+
+    def exit_assembly(self, value: str):
+        self.assembly += f"EXIT_{value}:" + "\n"
+    
+    def ident_assembly(self, value: str):
+        self.assembly += f"MOV EBX, [EBP{value}]" + "\n"
+
+    def end_assembly(self):
+        self.assembly += "POP EBP \n MOV EAX, 1 \n MOV EBX, 0 \n INT 0x80"
+
 class SymbolTable:
 
     def __init__(self):
         self.dict = {}
+        self.pos = -4
 
     def _get(self, var_name: str) -> int:
-        if var_name in self.dict: return self.dict[var_name]["value"], self.dict[var_name]["type"]
+        if var_name in self.dict: return self.dict[var_name]["pos"]
         return None
 
-    def _set(self, var_name: str, var_value: int, var_type: Type):
+    def _set(self, var_name: str, var_value: int):
         if not var_name in self.dict:
             if var_value != None: raise_error("not initialized var")
             self.dict[var_name] = {}
-            self.dict[var_name]["type"] = var_type
-        
-        else:
-            if self.dict[var_name]["type"] != var_type: 
-                if var_type == Type.STR or self.dict[var_name]["type"] == Type.STR: raise_error("not compatible types")
-
-                if var_type == Type.BOOL: var_value = int(var_value)
-                elif var_type == Type.INT: var_value = bool(var_value)
-
-            self.dict[var_name]["value"] = var_value
+            self.dict[var_name]["pos"] = self.pos
+            self.pos -= 4
 
 class Node:
 
@@ -230,122 +319,123 @@ class Node:
         self.token = token
         self.children = [NoOp() for i in range(n_children)]
         
-    def evaluate(self, st: SymbolTable): pass
+    def evaluate(self, st: SymbolTable, assembly: Assembler): pass
 
 class BinOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable): 
-        eval1 = self.children[0].evaluate(st)
-        eval2 = self.children[1].evaluate(st)
+    def evaluate(self, st: SymbolTable, assembly: Assembler): 
+        self.children[0].evaluate(st, assembly)
+        assembly.push_ebx()
+        self.children[1].evaluate(st, assembly)
+        assembly.pop_eax()
         
-        if (eval1[1] == Type.STR or eval2[1] == Type.STR) and self.token.type_ != Type.ET: raise_error("incompatible types")
-
-        if self.token.type_ == Type.PLUS: 
-            return eval1[0] + eval2[0], Type.INT
+        if self.token.type_ == Type.PLUS:
+            assembly.add_operation_assembly()
 
         elif self.token.type_ == Type.SUB: 
-            return eval1[0] - eval2[0], Type.INT
+            assembly.sub_operation_assembly()
 
         elif self.token.type_ == Type.DIV: 
-            return int(eval1[0] / eval2[0]), Type.INT
+            assembly.div_operation_assembly()
 
         elif self.token.type_ == Type.MULT: 
-            return int(eval1[0] * eval2[0]), Type.INT
+            assembly.mult_operation_assembly()
 
         elif self.token.type_ == Type.GT:
-            return bool(eval1[0] > eval2[0]), Type.BOOL
+            assembly.jg_assembly()
  
         elif self.token.type_ == Type.LT: 
-            return bool(eval1[0] < eval2[0]), Type.BOOL
+            assembly.jl_assembly()
 
         elif self.token.type_ == Type.ET: 
-            return bool(eval1[0] == eval2[0]), Type.BOOL
+            assembly.je_assembly()
 
         elif self.token.type_ == Type.AND: 
-            return bool(eval1[0] and eval2[0]), Type.BOOL
+            assembly.and_assembly()
 
         elif self.token.type_ == Type.OR: 
-            return bool(eval1[0] or eval2[0]), Type.BOOL
+            assembly.or_assembly()
 
 class AtrOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable): 
-        node = self.children[1].evaluate(st)
-        st._set(self.children[0].token.value, node[0], node[1])
+    def evaluate(self, st: SymbolTable, assembly: Assembler):
+        self.children[1].evaluate(st, assembly)
+        st._set(self.children[0].token.value, None)
+        r = st._get(self.children[0].token.value)
+        assembly.atr_variable(r)
 
 class UnOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): 
-        node = self.children[0].evaluate(st)
-        return self.token.value * node[0], node[1]
+    def evaluate(self, st: SymbolTable, assembly: Assembler):
+        self.children[0].evaluate(st, assembly)
+
+        if self.token.type_ == Type.SUB: assembly.neg_assembly()
 
 class NotOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): 
-        node = self.children[0].evaluate(st)
-        return not node[0], node[1] 
+    def evaluate(self, st: SymbolTable, assembly: Assembler):
+        self.children[0].evaluate(st, assembly)
+        assembly.not_assembly()
 
 class PrintOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): 
-        node = self.children[0].evaluate(st)
-        p = node[0]
-        if node[1] == Type.BOOL: p = "true" if node[0] else "false"
-        print(p)
+    def evaluate(self, st: SymbolTable, assembly: Assembler): 
+        self.children[0].evaluate(st, assembly)
+        assembly.print_assembly()
 
 class ReadlnOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): return int(input()), Type.INT
+    def evaluate(self, st: SymbolTable, assembly: Assembler): return int(input()), Type.INT
 
 class IntVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable): return self.token.value, self.token.type_
+    def evaluate(self, st: SymbolTable, assembly: Assembler): 
+        assembly.int_val_assembly(self.token.value)
 
 class StringVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable): return self.token.value[1:-1], self.token.type_
+    def evaluate(self, st: SymbolTable, assembly: Assembler): return self.token.value[1:-1], self.token.type_
 
 class BoolVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable): return True if self.token.value == "true" else False, self.token.type_
+    def evaluate(self, st: SymbolTable, assembly: Assembler): 
+        assembly.int_val_assembly("True" if self.token.value == "true" else "False")
 
 class TypeVal(Node):
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable): 
-        if self.token.type_ == Type.INTDEF: type_ = Type.INT
-        elif self.token.type_ == Type.STRDEF: type_ = Type.STR
-        elif self.token.type_ == Type.BOOLDEF: type_ = Type.BOOL
-
-        if not st._get(self.token.value): st._set(self.children[0].value, None, type_)
+    def evaluate(self, st: SymbolTable, assembly: Assembler): 
+        if not st._get(self.token.value): 
+            st._set(self.children[0].value, None)
+            assembly.def_variable()
         else: raise_error("double definition of variable")
 
 class WhileOp(Node):
@@ -353,45 +443,56 @@ class WhileOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable): 
-        while(self.children[0].evaluate(st)[0]): 
-            self.children[1].evaluate(st)
-
-class CondOp(Node):
-
-    def __init__(self, token: Token):
-        super().__init__(token, 3)
-    
-    def evaluate(self, st: SymbolTable): 
-        cond = self.children[0].evaluate(st)[0]
-        if cond: self.children[1].evaluate(st)
-        if type(self.children[2]) != NoOp:
-            if not cond: self.children[2].evaluate(st)
-
-class IdentVal(Node):
-
-    def __init__(self, token: Token):
-        super().__init__(token, 0)
-    
-    def evaluate(self, st: SymbolTable): 
-        r = st._get(self.token.value)
-        if not r: raise_error("key not found")
-        return r
+    def evaluate(self, st: SymbolTable, assembly: Assembler):
+        assembly.while_assembly(self.token.id_)
+        self.children[0].evaluate(st, assembly)
+        assembly.cmp_while_assembly(self.token.id_)
+        self.children[1].evaluate(st, assembly)
+        assembly.jmp_assembly("LOOP_" + str(self.token.id_))
+        assembly.exit_assembly(self.token.id_)
 
 class NoOp(Node):
 
     def __init__(self):
         super().__init__(None, 0)
     
-    def evaluate(self, st: SymbolTable): return 
+    def evaluate(self, st: SymbolTable, assembly: Assembler): return 
+
+class CondOp(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 3)
+    
+    def evaluate(self, st: SymbolTable, assembly: Assembler):
+        self.children[0].evaluate(st, assembly)
+        assembly.if_assembly(self.token.id_)
+        
+        if type(self.children[2]) != NoOp:
+            self.children[2].evaluate(st, assembly)
+
+        assembly.jmp_assembly("EXIT_" + str(self.token.id_))
+        assembly.label_assembly("IF_" + str(self.token.id_))
+        self.children[1].evaluate(st, assembly)
+        assembly.exit_assembly(self.token.id_)
+
+class IdentVal(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable, assembly: Assembler): 
+        r = st._get(self.token.value)
+        if not r: raise_error("key not found")
+        
+        assembly.ident_assembly(r)
 
 class Block():
     def __init__(self, tree: list):
         self.tree = tree
 
-    def evaluate(self, st: SymbolTable):
+    def evaluate(self, st: SymbolTable, assembly: Assembler):
         for tree in self.tree: 
-            tree.evaluate(st)
+            tree.evaluate(st, assembly)
 
 class Parser:
 
@@ -675,8 +776,13 @@ def raise_error(error: str):
 
 def main(argv: str) -> int:
     trees = Parser().code(PrePro().filter(open(argv, "r").read()))
+    
+    assembly = Assembler()
     st = SymbolTable()
-    trees.evaluate(st)
+    trees.evaluate(st, assembly)
+    assembly.end_assembly()
+
+    print(assembly.assembly)
     return 0
 
 if __name__ == "__main__":
