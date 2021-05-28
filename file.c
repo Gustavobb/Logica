@@ -1,20 +1,27 @@
 {
-    bool a;
-    int b;
-    string c;
-
-    a = true;
-    b = 1;
-
-    while(a)
-    {
-        b = b + 1;
-        if (b > 10) a = false;
+    int i;
+    int n;
+    int f;
+    n = 5;
+    i = 2;
+    f = -1;
+    while (i < n + 1) {
+        f = f * i;
+        i = i + 1;
     }
 
-    c = "test";
+    bool a;
 
-    println(c);
-    println(b);
-    println(a);
+    if (f == -120) 
+    {
+        a = true;
+        f = 1;
+    }
+
+    if (a)
+    {
+        println(1);
+    }
+
+    println(f);
 }
