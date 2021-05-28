@@ -304,6 +304,7 @@ class SymbolTable:
 
     def _get(self, var_name: str) -> int:
         if var_name in self.dict: return self.dict[var_name]["pos"]
+
         return None
 
     def _set(self, var_name: str, var_value: int):
@@ -436,6 +437,7 @@ class TypeVal(Node):
         if not st._get(self.token.value): 
             st._set(self.children[0].value, None)
             assembly.def_variable()
+            
         else: raise_error("double definition of variable")
 
 class WhileOp(Node):
@@ -667,7 +669,7 @@ class Parser:
         if self.tokenizer.actual.type_ == Type.IDENTIFIER:
             node = IdentVal(self.tokenizer.actual)
             self.tokenizer.select_next()
-
+            
             if self.tokenizer.actual.type_ == Type.ATR:
                 tmp = node
                 node = AtrOp(self.tokenizer.actual)
@@ -721,7 +723,7 @@ class Parser:
             if self.tokenizer.actual.type_ == Type.ELSE:      
                 self.tokenizer.select_next()     
                 node.children[2] = self.command()
-                                    
+            
             return node
     
         elif self.tokenizer.actual.type_ == Type.EOL: 
