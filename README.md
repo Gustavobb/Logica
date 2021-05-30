@@ -9,9 +9,11 @@ Exemplo: python3 main.py "2+2"
 
 # EBNF: 
 
+FUNCDEFBLOCK = TYPE, IDENTIFIER, "(", (TYPE, IDENTIFIER | ,), ")", COMMAND
+
 BLOCK = "{", { COMMAND }, "}" ; 
 
-COMMAND = ( λ | ASSIGNMENT | PRINT | BLOCK | WHILE | IF | STRDEF | BOOLDEF | INTDEF), ";" ; 
+COMMAND = ( λ | ASSIGNMENT | PRINT | BLOCK | WHILE | IF | STRDEF | BOOLDEF | INTDEF | (IDENTIFIER | IDENTIFIER, "(", (OREXPR | ,), ")")), ";" ; 
 
 WHILE = "while", "(", OREXPR ,")", COMMAND;
 
@@ -33,7 +35,7 @@ EXPRESSION = TERM, { ("+" | "-"), TERM } ;
 
 TERM = FACTOR, { ("*" | "/"), FACTOR } ; 
 
-FACTOR = (("+" | "-" | "!" ), FACTOR) | NUMBER | BOOL | STR | "(", OREXPR,  ")" | IDENTIFIER | READLN;
+FACTOR = (("+" | "-" | "!" ), FACTOR) | NUMBER | BOOL | STR | "(", OREXPR,  ")" | IDENTIFIER | (IDENTIFIER, "(", (OREXPR | ,), ")") | READLN;
 
 READLN = "readln", "(",")";
 

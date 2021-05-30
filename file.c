@@ -1,20 +1,18 @@
-{
-    bool a;
+int soma(int x, int y) {
+    int r;
+    r = x + y;
+    
+    if (r < 100)
+        r = 10;
+    
+    return r;
+}
+
+int main() {
+    int a;
     int b;
-    string c;
-
-    a = true;
-    b = 1;
-
-    while(a)
-    {
-        b = b + 1;
-        if (b > 10) a = false;
-    }
-
-    c = "test";
-
-    println(c);
-    println(b);
+    a = 3;
+    b = soma(a, 4);
     println(a);
+    println(b);
 }
