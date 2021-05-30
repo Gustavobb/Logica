@@ -1,27 +1,18 @@
-{
-    int i;
-    int n;
-    int f;
-    n = 5;
-    i = 2;
-    f = -1;
-    while (i < n + 1) {
-        f = f * i;
-        i = i + 1;
-    }
+int soma(int x, int y) {
+    int r;
+    r = x + y;
+    
+    if (r < 100)
+        r = 10;
+    
+    return r;
+}
 
-    bool a;
-
-    if (f == -120) 
-    {
-        a = true;
-        f = 1;
-    }
-
-    if (a)
-    {
-        println(1);
-    }
-
-    println(f);
+int main() {
+    int a;
+    int b;
+    a = 3;
+    b = soma(a, 4);
+    println(a);
+    println(b);
 }

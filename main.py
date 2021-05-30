@@ -1,4 +1,3 @@
-# macielcalebe
 from enum import Enum
 import sys
 
@@ -33,6 +32,8 @@ class Type(Enum):
     STRDEF = 27
     BOOL = 28
     STR = 29
+    RETURN = 30
+    COMMA = 31
 
 class Token:
 
@@ -117,6 +118,10 @@ class Tokenizer:
                     elif str_ == "readln":
                         token = Token(Type.READLN, None, self.position)
                         break
+                    
+                    elif str_ == "return":
+                        token = Token(Type.RETURN, None)
+                        break
                         
                     elif str_ == "while":
                         token = Token(Type.WHILE, None, self.position)
@@ -164,6 +169,9 @@ class Tokenizer:
 
         elif tmp == '+': 
             token = Token(Type.PLUS, 1, self.position)
+
+        elif tmp == ',': 
+            token = Token(Type.COMMA, -1)
 
         elif tmp == '-': 
             token = Token(Type.SUB, -1, self.position)
@@ -302,17 +310,43 @@ class SymbolTable:
         self.dict = {}
         self.pos = -4
 
-    def _get(self, var_name: str) -> int:
-        if var_name in self.dict: return self.dict[var_name]["pos"]
+    def _get_variable(self, var_name: str, func_name: str) -> int:
+        if var_name in self.dict[func_name]: 
+            try: return self.dict[func_name][var_name]["value"], self.dict[func_name][var_name]["type"]
+            except: return True
 
         return None
+    
+    def _get_node(self, func_name: str):
+        if func_name in self.dict: 
+            return self.dict[func_name]["node"]
+            
+        return None
 
-    def _set(self, var_name: str, var_value: int):
-        if not var_name in self.dict:
+    def _set_variable(self, var_name: str, var_value: int, var_type: Type, func_name: str, var_func_type="local"):
+        if not var_name in self.dict[func_name]:
             if var_value != None: raise_error("not initialized var")
-            self.dict[var_name] = {}
-            self.dict[var_name]["pos"] = self.pos
-            self.pos -= 4
+            self.dict[func_name][var_name] = {}
+            self.dict[func_name][var_name]["type"] = var_type
+            self.dict[func_name][var_name]["var_func_type"] = var_func_type
+        
+        else:
+            if self.dict[func_name][var_name]["type"] != var_type: 
+                if var_type == Type.STR or self.dict[func_name][var_name]["type"] == Type.STR: raise_error("not compatible types")
+
+                if var_type == Type.BOOL: var_value = int(var_value)
+                elif var_type == Type.INT: var_value = bool(var_value)
+
+            self.dict[func_name][var_name]["value"] = var_value
+    
+    def create_function(self, func_name: str, func_type: Type, func):
+        if func_name not in self.dict:
+            self.dict[func_name] = {}
+            self.dict[func_name]["node"] = func
+            self.dict[func_name]["type"] = func_type
+            return True
+
+        return False
 
 class Node:
 
@@ -320,21 +354,22 @@ class Node:
         self.token = token
         self.children = [NoOp() for i in range(n_children)]
         
-    def evaluate(self, st: SymbolTable, assembly: Assembler): pass
+    def evaluate(self, st: SymbolTable, func_name: str): pass
+
 
 class BinOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): 
-        self.children[0].evaluate(st, assembly)
-        assembly.push_ebx()
-        self.children[1].evaluate(st, assembly)
-        assembly.pop_eax()
-        
-        if self.token.type_ == Type.PLUS:
-            assembly.add_operation_assembly()
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        eval1 = self.children[0].evaluate(st, func_name)
+        eval2 = self.children[1].evaluate(st, func_name)
+
+        if (eval1[1] == Type.STR or eval2[1] == Type.STR) and self.token.type_ != Type.ET: raise_error("incompatible types")
+
+        if self.token.type_ == Type.PLUS: 
+            return eval1[0] + eval2[0], Type.INT
 
         elif self.token.type_ == Type.SUB: 
             assembly.sub_operation_assembly()
@@ -365,79 +400,136 @@ class AtrOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler):
-        self.children[1].evaluate(st, assembly)
-        st._set(self.children[0].token.value, None)
-        r = st._get(self.children[0].token.value)
-        assembly.atr_variable(r)
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        node = self.children[1].evaluate(st, func_name)
+        st._set_variable(self.children[0].token.value, node[0], node[1], func_name)
+
 
 class UnOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler):
-        self.children[0].evaluate(st, assembly)
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        node = self.children[0].evaluate(st, func_name)
+        return self.token.value * node[0], node[1]
 
-        if self.token.type_ == Type.SUB: assembly.neg_assembly()
 
 class NotOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler):
-        self.children[0].evaluate(st, assembly)
-        assembly.not_assembly()
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        node = self.children[0].evaluate(st, func_name)
+        return not node[0], node[1] 
+
 
 class PrintOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): 
-        self.children[0].evaluate(st, assembly)
-        assembly.print_assembly()
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        node = self.children[0].evaluate(st, func_name)
+        p = node[0]
+        if node[1] == Type.BOOL: p = "true" if node[0] else "false"
+        print(p)
+
 
 class ReadlnOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): return int(input()), Type.INT
+    def evaluate(self, st: SymbolTable, func_name: str): return int(input()), Type.INT
 
 class IntVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): 
-        assembly.int_val_assembly(self.token.value)
+    def evaluate(self, st: SymbolTable, func_name: str): return self.token.value, self.token.type_
+
 
 class StringVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): return self.token.value[1:-1], self.token.type_
+    def evaluate(self, st: SymbolTable, func_name: str): return self.token.value[1:-1], self.token.type_
+
 
 class BoolVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): 
-        assembly.int_val_assembly("True" if self.token.value == "true" else "False")
+    def evaluate(self, st: SymbolTable, func_name: str): return True if self.token.value == "true" else False, self.token.type_
 
-class TypeVal(Node):
+class VarDec(Node):
+
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        for i in self.children: i.evaluate(st, func_name)
+
+class FuncDec(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 2)
+    
+    def evaluate(self, st: SymbolTable, func_name: str):
+        if not st.create_function(self.token.value, self.token.type_, self): raise_error("multiple declaration of same function")
+        self.children[0].evaluate(st, self.token.value)
+
+class ReturnVal(Node):
+
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): 
-        if not st._get(self.token.value): 
-            st._set(self.children[0].value, None)
-            assembly.def_variable()
-            
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        return self.children[0].evaluate(st, func_name)
+
+class FuncCall(Node):
+
+    def __init__(self, token: Token):
+        super().__init__(token, 0)
+    
+    def evaluate(self, st: SymbolTable, func_name: str):
+        node = st._get_node(self.token.value)
+        if not node: raise_error("func not defined")
+        
+        l = []
+        for key in st.dict[self.token.value].items():
+            if type(key[1]) is dict:
+                if key[1]["var_func_type"] == "argument": l += [(key[0], key[1]["type"])]
+
+        if len(l) != len(self.children): raise_error("different sizes in call, def function")
+
+        for i in range(len(self.children)): 
+            value = self.children[i].evaluate(st, func_name)
+
+            if (value[1] != l[i][1]): raise_error("invalid type in function call")
+            st._set_variable(l[i][0], value[0], value[1], self.token.value)
+        
+        # propria naruteza recursiva nao deixa eu redefinir variavel?
+        return node.children[1].evaluate(st, self.token.value)
+
+class TypeVal(Node):
+    def __init__(self, token: Token, var_func_type: str):
+        super().__init__(token, 1)
+        self.var_func_type = var_func_type
+    
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        if self.token.type_ == Type.INTDEF: type_ = Type.INT
+        elif self.token.type_ == Type.STRDEF: type_ = Type.STR
+        elif self.token.type_ == Type.BOOLDEF: type_ = Type.BOOL
+        
+        if not st._get_variable(self.children[0].value, func_name): st._set_variable(self.children[0].value, None, type_, func_name, self.var_func_type)
+
         else: raise_error("double definition of variable")
 
 class WhileOp(Node):
@@ -445,56 +537,50 @@ class WhileOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler):
-        assembly.while_assembly(self.token.id_)
-        self.children[0].evaluate(st, assembly)
-        assembly.cmp_while_assembly(self.token.id_)
-        self.children[1].evaluate(st, assembly)
-        assembly.jmp_assembly("LOOP_" + str(self.token.id_))
-        assembly.exit_assembly(self.token.id_)
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        while(self.children[0].evaluate(st, func_name)[0]): 
+            self.children[1].evaluate(st, func_name)
 
-class NoOp(Node):
-
-    def __init__(self):
-        super().__init__(None, 0)
-    
-    def evaluate(self, st: SymbolTable, assembly: Assembler): return 
 
 class CondOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 3)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler):
-        self.children[0].evaluate(st, assembly)
-        assembly.if_assembly(self.token.id_)
-        
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        cond = self.children[0].evaluate(st, func_name)[0]
+        if type(cond) is str: raise_error("cant have str in if")
+        if cond: self.children[1].evaluate(st, func_name)
         if type(self.children[2]) != NoOp:
-            self.children[2].evaluate(st, assembly)
+            if not cond: self.children[2].evaluate(st, func_name)
 
-        assembly.jmp_assembly("EXIT_" + str(self.token.id_))
-        assembly.label_assembly("IF_" + str(self.token.id_))
-        self.children[1].evaluate(st, assembly)
-        assembly.exit_assembly(self.token.id_)
 
 class IdentVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, assembly: Assembler): 
-        r = st._get(self.token.value)
+    def evaluate(self, st: SymbolTable, func_name: str): 
+        r = st._get_variable(self.token.value, func_name)
         if not r: raise_error("key not found")
-        
-        assembly.ident_assembly(r)
+        return r
+
+class NoOp(Node):
+
+    def __init__(self):
+        super().__init__(None, 0)
+    
+    def evaluate(self, st: SymbolTable, func_name: str): return 
+
 
 class Block():
     def __init__(self, tree: list):
         self.tree = tree
 
-    def evaluate(self, st: SymbolTable, assembly: Assembler):
-        for tree in self.tree: 
-            tree.evaluate(st, assembly)
+    def evaluate(self, st: SymbolTable, func_name: str):
+        for tree in self.tree:
+            if isinstance(tree, ReturnVal): return tree.evaluate(st, func_name)
+            tree.evaluate(st, func_name)
 
 class Parser:
 
@@ -540,10 +626,26 @@ class Parser:
             self.tokenizer.select_next() 
             node.children[0] = self.factor()
             return node
-
+        
         elif self.tokenizer.actual.type_ == Type.IDENTIFIER:
             node = IdentVal(self.tokenizer.actual)
+            token = self.tokenizer.actual
             self.tokenizer.select_next()
+
+            if self.tokenizer.actual.type_ == Type.SPARENTHESIS:
+                node = FuncCall(token)
+
+                while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
+                    self.tokenizer.select_next()
+                    result = self.orexpr()
+                    if result == None: raise_error("comma sintax error")
+                    node.children.append(result)
+
+                    if self.tokenizer.actual.type_ == Type.COMMA: continue
+                    elif self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of function arguments")
+                
+                self.tokenizer.select_next()
+
             return node
 
         elif self.tokenizer.actual.type_ == Type.READLN:
@@ -668,9 +770,24 @@ class Parser:
     def command(self):
         if self.tokenizer.actual.type_ == Type.IDENTIFIER:
             node = IdentVal(self.tokenizer.actual)
+            token = self.tokenizer.actual
             self.tokenizer.select_next()
+
+            if self.tokenizer.actual.type_ == Type.SPARENTHESIS:
+                node = FuncCall(token)
+
+                while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
+                    self.tokenizer.select_next()
+                    result = self.orexpr()
+                    if result == None: raise_error("comma sintax error")
+                    node.children.append(result)
+
+                    if self.tokenizer.actual.type_ == Type.COMMA: continue
+                    elif self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of function arguments")
+                
+                self.tokenizer.select_next()
             
-            if self.tokenizer.actual.type_ == Type.ATR:
+            elif self.tokenizer.actual.type_ == Type.ATR:
                 tmp = node
                 node = AtrOp(self.tokenizer.actual)
                 node.children[0] = tmp
@@ -684,7 +801,7 @@ class Parser:
             return node
 
         elif self.tokenizer.actual.type_ in [Type.BOOLDEF, Type.INTDEF, Type.STRDEF]:
-            node = TypeVal(self.tokenizer.actual)
+            node = TypeVal(self.tokenizer.actual, "local")
             self.tokenizer.select_next()
             if self.tokenizer.actual.type_ != Type.IDENTIFIER: raise_error("wrong definition of variable")
             node.children[0] = self.tokenizer.actual
@@ -692,7 +809,15 @@ class Parser:
             if self.tokenizer.actual.type_ == Type.EOL: self.tokenizer.select_next()
             else: raise_error("not closed sintax")
             return node
-
+        
+        elif self.tokenizer.actual.type_ == Type.RETURN:
+            node = ReturnVal(self.tokenizer.actual)
+            self.tokenizer.select_next()
+            if self.tokenizer.actual.type_ not in [Type.INT, Type.STR, Type.BOOL, Type.IDENTIFIER]: raise_error("return is a reserved word")
+            node.children[0] = self.orexpr()
+            if self.tokenizer.actual.type_ != Type.EOL: raise_error("not closed sintax")
+            return node
+            
         elif self.tokenizer.actual.type_ == Type.PRINTLN:
             node = PrintOp(self.tokenizer.actual)
             self.tokenizer.select_next()
@@ -744,10 +869,53 @@ class Parser:
         if self.tokenizer.actual.type_ == Type.EKEY: self.tokenizer.select_next()
         
         return Block(trees)
+    
+    def func_def_block(self):
+        ast = []
+
+        while (self.tokenizer.actual.type_ != Type.EOF):
+            if self.tokenizer.actual.type_ in [Type.BOOLDEF, Type.INTDEF, Type.STRDEF]:
+
+                # name and type
+                node = FuncDec(self.tokenizer.actual)
+                self.tokenizer.select_next()
+                if self.tokenizer.actual.type_ != Type.IDENTIFIER: raise_error("wrong definition of function")
+                node.token.value = self.tokenizer.actual.value
+
+                # arguments
+                self.tokenizer.select_next()
+                if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("wrong definition of function")
+                self.tokenizer.select_next()
+                node_child_0 = VarDec(self.tokenizer.actual.type_)
+
+                while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
+
+                    if self.tokenizer.actual.type_ in [Type.BOOLDEF, Type.INTDEF, Type.STRDEF]:
+                        type_node = TypeVal(self.tokenizer.actual, "argument")
+                        self.tokenizer.select_next()
+                        if self.tokenizer.actual.type_ != Type.IDENTIFIER: raise_error("wrong definition of arguments")
+                        type_node.children[0] = self.tokenizer.actual
+                        self.tokenizer.select_next()
+                        if self.tokenizer.actual.type_ != Type.COMMA and self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of arguments")
+                        node_child_0.children.append(type_node)
+                        continue
+
+                    self.tokenizer.select_next()
+                
+                node.children[0] = node_child_0
+                self.tokenizer.select_next()
+
+                # stm
+                node.children[1] = self.command()
+                ast += [node]
+        
+        return ast
 
     def code(self, code: str) -> int:
         self.tokenizer = Tokenizer(code)
-        return self.block()
+        ast = self.func_def_block()
+        ast.append(FuncCall(Token(None, "main")))
+        return ast
 
 class PrePro:
 
@@ -781,10 +949,11 @@ def main(argv: str) -> int:
     
     assembly = Assembler()
     st = SymbolTable()
-    trees.evaluate(st, assembly)
-    assembly.end_assembly()
 
-    print(assembly.assembly)
+    for tree in trees:
+        tree.evaluate(st, None)
+
+
     return 0
 
 if __name__ == "__main__":
