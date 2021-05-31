@@ -420,7 +420,7 @@ class FuncCall(Node):
         
         # propria naruteza recursiva nao deixa eu redefinir variavel?
         return_ = node.children[1].evaluate(st, self.token.value);
-        
+
         if (return_ == None): return
         if st.dict[self.token.value]["type"] == Type.INTDEF: type_ = Type.INT
         elif st.dict[self.token.value]["type"] == Type.STRDEF: type_ = Type.STR
@@ -455,13 +455,15 @@ class CondOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 3)
-    
+            
+    ## fixme com return
     def evaluate(self, st: SymbolTable, func_name: str): 
         cond = self.children[0].evaluate(st, func_name)[0]
         if type(cond) is str: raise_error("cant have str in if")
-        if cond: self.children[1].evaluate(st, func_name)
+        if cond: return self.children[1].evaluate(st, func_name)
+
         if type(self.children[2]) != NoOp:
-            if not cond: self.children[2].evaluate(st, func_name)
+            if not cond: return self.children[2].evaluate(st, func_name)
 
 class IdentVal(Node):
 
@@ -486,8 +488,8 @@ class Block():
 
     def evaluate(self, st: SymbolTable, func_name: str):
         for tree in self.tree:
-            if isinstance(tree, ReturnVal): return tree.evaluate(st, func_name)
-            tree.evaluate(st, func_name)
+            r = tree.evaluate(st, func_name)
+            if r != None: return r
 
 class Parser:
 
