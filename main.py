@@ -419,7 +419,11 @@ class FuncCall(Node):
             st._set_variable(l[i][0], value[0], value[1], self.token.value)
         
         # propria naruteza recursiva nao deixa eu redefinir variavel?
-        return node.children[1].evaluate(st, self.token.value)
+        return_ = node.children[1].evaluate(st, self.token.value);
+        
+        if (return_ == None): return
+        if (return_[1] != st.dict[self.token.value]["type"]): raise_error("invalid return type")
+        return return_
 
 class TypeVal(Node):
     def __init__(self, token: Token, var_func_type: str):
@@ -534,12 +538,17 @@ class Parser:
             if self.tokenizer.actual.type_ == Type.SPARENTHESIS:
                 node = FuncCall(token)
 
+                comma = False
                 while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
                     self.tokenizer.select_next()
                     result = self.orexpr()
                     if result != None: node.children.append(result)
+                    elif comma: raise_error("expecting new argument")
 
-                    if self.tokenizer.actual.type_ == Type.COMMA: continue
+                    if self.tokenizer.actual.type_ == Type.COMMA: 
+                        comma = True
+                        continue
+
                     elif self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of function arguments")
                 
                 self.tokenizer.select_next()
@@ -674,13 +683,21 @@ class Parser:
             if self.tokenizer.actual.type_ == Type.SPARENTHESIS:
                 node = FuncCall(token)
 
+                comma = False
                 while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
                     self.tokenizer.select_next()
                     result = self.orexpr()
-                    if result == None: raise_error("comma sintax error")
-                    node.children.append(result)
+                    
+                    if result != None: 
+                        comma = False
+                        node.children.append(result)
 
-                    if self.tokenizer.actual.type_ == Type.COMMA: continue
+                    elif comma: raise_error("expecting new argument")
+
+                    if self.tokenizer.actual.type_ == Type.COMMA: 
+                        comma = True
+                        continue
+
                     elif self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of function arguments")
                 
                 self.tokenizer.select_next()
@@ -794,10 +811,13 @@ class Parser:
                         if self.tokenizer.actual.type_ != Type.IDENTIFIER: raise_error("wrong definition of arguments")
                         type_node.children[0] = self.tokenizer.actual
                         self.tokenizer.select_next()
+                        
                         if self.tokenizer.actual.type_ != Type.COMMA and self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of arguments")
+                        
                         node_child_0.children.append(type_node)
                         continue
-
+                    
+                    if self.tokenizer.actual.type_ == Type.COMMA: raise_error("expecting new argument")
                     self.tokenizer.select_next()
                 
                 node.children[0] = node_child_0
