@@ -1,31 +1,16 @@
-/*Ok*/
-
-int soma(int x, int y)
-{
-    int res;
-    res = x + y;
-    return res;    
+int qualquer(){
+    int x;
+    x = 8;
+    return x;
 }
 
-bool comparaSoma()
-{
-    bool res;
+
+int main(){
     int x;
     x = 3;
-    
-    res = soma(x,2) == 8;
-    
-    return res;
-}
-
-
-int main()
-{
-    int x;
-    bool z;
-    
-    z = comparaSoma();
-    x = z;
     println(x);
-    
+    int y;
+    y = qualquer();
+    println(y);
+    println(x);
 }
