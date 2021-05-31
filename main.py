@@ -537,8 +537,7 @@ class Parser:
                 while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
                     self.tokenizer.select_next()
                     result = self.orexpr()
-                    if result == None: raise_error("comma sintax error")
-                    node.children.append(result)
+                    if result != None: node.children.append(result)
 
                     if self.tokenizer.actual.type_ == Type.COMMA: continue
                     elif self.tokenizer.actual.type_ != Type.EPARENTHESIS: raise_error("wrong definition of function arguments")
@@ -807,6 +806,8 @@ class Parser:
                 # stm
                 node.children[1] = self.command()
                 ast += [node]
+            
+            else: raise_error("sintax error")
         
         return ast
 

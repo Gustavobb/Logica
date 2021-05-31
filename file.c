@@ -1,18 +1,16 @@
-int soma(int x, int y) {
-    int r;
-    r = x + y;
-    
-    if (r < 100)
-        r = 10;
-    
-    return r;
+int qualquer(){
+    int x;
+    x = 8;
+    return x;
 }
 
-int main() {
-    int a;
-    int b;
-    a = 3;
-    b = soma(a, 4);
-    println(a);
-    println(b);
+
+int main(){
+    int x;
+    x = 3;
+    println(x);
+    int y;
+    y = qualquer();
+    println(y);
+    println(x);
 }
