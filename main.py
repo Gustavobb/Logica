@@ -802,7 +802,8 @@ class Parser:
                 if self.tokenizer.actual.type_ != Type.SPARENTHESIS: raise_error("wrong definition of function")
                 self.tokenizer.select_next()
                 node_child_0 = VarDec(self.tokenizer.actual.type_)
-
+                
+                comma = False
                 while (self.tokenizer.actual.type_ != Type.EPARENTHESIS):
 
                     if self.tokenizer.actual.type_ in [Type.BOOLDEF, Type.INTDEF, Type.STRDEF]:
@@ -817,8 +818,9 @@ class Parser:
                         node_child_0.children.append(type_node)
                         continue
                     
-                    if self.tokenizer.actual.type_ == Type.COMMA: raise_error("expecting new argument")
+                    if self.tokenizer.actual.type_ == Type.COMMA: comma = True
                     self.tokenizer.select_next()
+                    if comma and self.tokenizer.actual.type_ not in [Type.BOOLDEF, Type.INTDEF, Type.STRDEF]: raise_error("expected new argument")
                 
                 node.children[0] = node_child_0
                 self.tokenizer.select_next()
