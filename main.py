@@ -422,7 +422,11 @@ class FuncCall(Node):
         return_ = node.children[1].evaluate(st, self.token.value);
         
         if (return_ == None): return
-        if (return_[1] != st.dict[self.token.value]["type"]): raise_error("invalid return type")
+        if st.dict[self.token.value]["type"] == Type.INTDEF: type_ = Type.INT
+        elif st.dict[self.token.value]["type"] == Type.STRDEF: type_ = Type.STR
+        elif st.dict[self.token.value]["type"] == Type.BOOLDEF: type_ = Type.BOOL
+        
+        if (return_[1] != type_): raise_error("invalid return type")
         return return_
 
 class TypeVal(Node):
