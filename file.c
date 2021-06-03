@@ -1,16 +1,15 @@
-int qualquer(){
-    int x;
-    x = 8;
-    return x;
+int soma(int x, int y)
+{
+    int res;
+    res = x + y;
+    return res;    
 }
 
-
-int main(){
-    int x;
-    x = 3;
-    println(x);
-    int y;
-    y = qualquer();
-    println(y);
-    println(x);
+int main()
+{
+    int r;
+    soma(3,5);/*Ok fazer isso*/
+    r = soma(3,5);
+    println(r);
+    
 }
