@@ -216,23 +216,25 @@ class Tokenizer:
         self.actual = token
         self.position += 1
 
-class SymbolTable:
+class FunctionSymbolTable:
 
     def __init__(self):
         self.dict = {}
 
+    def create_function(self, func_name: str, func_type: Type, func):
+        if func_name not in self.dict:
+            self.dict[func_name] = {}
+            self.dict[func_name]["node"] = func
+            self.dict[func_name]["type"] = func_type
+            return True
+
+        return False
+    
     def _get_variable(self, var_name: str, func_name: str) -> int:
         if var_name in self.dict[func_name]: 
-            try: return self.dict[func_name][var_name]["value"], self.dict[func_name][var_name]["type"]
-            except: return True
+            return True
 
-        return None
-    
-    def _get_node(self, func_name: str):
-        if func_name in self.dict: 
-            return self.dict[func_name]["node"]
-            
-        return None
+        return False
 
     def _set_variable(self, var_name: str, var_value: int, var_type: Type, func_name: str, var_func_type="local"):
         if not var_name in self.dict[func_name]:
@@ -242,22 +244,41 @@ class SymbolTable:
             self.dict[func_name][var_name]["var_func_type"] = var_func_type
         
         else:
-            if self.dict[func_name][var_name]["type"] != var_type: 
-                if var_type == Type.STR or self.dict[func_name][var_name]["type"] == Type.STR: raise_error("not compatible types")
+            raise_error("double def in arguments")
+
+class SymbolTable:
+
+    def __init__(self, f: dict):
+        self.dict = f.copy()
+
+    def _get_variable(self, var_name: str, func_name: str) -> int:
+        if var_name in self.dict:
+            try: return self.dict[var_name]["value"], self.dict[var_name]["type"]
+            except: return True
+
+        return None
+    
+    def _get_node(self):
+        if self.dict["node"] != None: 
+            return self.dict["node"]
+            
+        return None
+
+    def _set_variable(self, var_name: str, var_value: int, var_type: Type, func_name: str, var_func_type="local"):
+        if not var_name in self.dict:
+            if var_value != None: raise_error("not initialized var")
+            self.dict[var_name] = {}
+            self.dict[var_name]["type"] = var_type
+            self.dict[var_name]["var_func_type"] = var_func_type
+        
+        else:
+            if self.dict[var_name]["type"] != var_type: 
+                if var_type == Type.STR or self.dict[var_name]["type"] == Type.STR: raise_error("not compatible types")
 
                 if var_type == Type.BOOL: var_value = int(var_value)
                 elif var_type == Type.INT: var_value = bool(var_value)
 
-            self.dict[func_name][var_name]["value"] = var_value
-    
-    def create_function(self, func_name: str, func_type: Type, func):
-        if func_name not in self.dict:
-            self.dict[func_name] = {}
-            self.dict[func_name]["node"] = func
-            self.dict[func_name]["type"] = func_type
-            return True
-
-        return False
+            self.dict[var_name]["value"] = var_value
 
 class Node:
 
@@ -265,16 +286,16 @@ class Node:
         self.token = token
         self.children = [NoOp() for i in range(n_children)]
         
-    def evaluate(self, st: SymbolTable, func_name: str): pass
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): pass
 
 class BinOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        eval1 = self.children[0].evaluate(st, func_name)
-        eval2 = self.children[1].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        eval1 = self.children[0].evaluate(fst, st, func_name)
+        eval2 = self.children[1].evaluate(fst, st, func_name)
 
         if (eval1[1] == Type.STR or eval2[1] == Type.STR) and self.token.type_ != Type.ET: raise_error("incompatible types")
 
@@ -310,8 +331,8 @@ class AtrOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        node = self.children[1].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        node = self.children[1].evaluate(fst, st, func_name)
         st._set_variable(self.children[0].token.value, node[0], node[1], func_name)
 
 class UnOp(Node):
@@ -319,8 +340,8 @@ class UnOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        node = self.children[0].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        node = self.children[0].evaluate(fst, st, func_name)
         return self.token.value * node[0], node[1]
 
 class NotOp(Node):
@@ -328,8 +349,8 @@ class NotOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        node = self.children[0].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        node = self.children[0].evaluate(fst, st, func_name)
         return not node[0], node[1] 
 
 class PrintOp(Node):
@@ -337,8 +358,8 @@ class PrintOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        node = self.children[0].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        node = self.children[0].evaluate(fst, st, func_name)
         p = node[0]
         if node[1] == Type.BOOL: p = "true" if node[0] else "false"
         print(p)
@@ -348,129 +369,134 @@ class ReadlnOp(Node):
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, func_name: str): return int(input()), Type.INT
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): return int(input()), Type.INT
 
 class IntVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str): return self.token.value, self.token.type_
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): return self.token.value, self.token.type_
 
 class StringVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str): return self.token.value[1:-1], self.token.type_
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): return self.token.value[1:-1], self.token.type_
 
 class BoolVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str): return True if self.token.value == "true" else False, self.token.type_
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): return True if self.token.value == "true" else False, self.token.type_
 
 class VarDec(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        for i in self.children: i.evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        for i in self.children: i.evaluate(fst, st, func_name)
 
 class FuncDec(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, func_name: str):
-        if not st.create_function(self.token.value, self.token.type_, self): raise_error("multiple declaration of same function")
-        self.children[0].evaluate(st, self.token.value)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str):
+        if not fst.create_function(self.token.value, self.token.type_, self): raise_error("multiple declaration of same function")
+        self.children[0].evaluate(fst, st, self.token.value)
 
 class ReturnVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 1)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        return self.children[0].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        return self.children[0].evaluate(fst, st, func_name)
 
 class FuncCall(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str):
-        node = st._get_node(self.token.value)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str):
+        st_ = SymbolTable(fst.dict[self.token.value])
+        node = st_._get_node()
         if not node: raise_error("func not defined")
         
         l = []
-        for key in st.dict[self.token.value].items():
+        for key in st_.dict.items():
             if type(key[1]) is dict:
                 if key[1]["var_func_type"] == "argument": l += [(key[0], key[1]["type"])]
-
+        
         if len(l) != len(self.children): raise_error("different sizes in call, def function")
 
-        for i in range(len(self.children)): 
-            value = self.children[i].evaluate(st, func_name)
-
+        for i in range(len(self.children)):
+            # mudar st
+            value = self.children[i].evaluate(fst, st, func_name)
             if (value[1] != l[i][1]): raise_error("invalid type in function call")
-            st._set_variable(l[i][0], value[0], value[1], self.token.value)
+            st_._set_variable(l[i][0], value[0], value[1], self.token.value)
         
-        # propria naruteza recursiva nao deixa eu redefinir variavel?
-        return_ = node.children[1].evaluate(st, self.token.value);
-
+        return_ = node.children[1].evaluate(fst, st_, self.token.value);
+        
         if (return_ == None): return
-        if st.dict[self.token.value]["type"] == Type.INTDEF: type_ = Type.INT
-        elif st.dict[self.token.value]["type"] == Type.STRDEF: type_ = Type.STR
-        elif st.dict[self.token.value]["type"] == Type.BOOLDEF: type_ = Type.BOOL
+        if st_.dict["type"] == Type.INTDEF: type_ = Type.INT
+        elif st_.dict["type"] == Type.STRDEF: type_ = Type.STR
+        elif st_.dict["type"] == Type.BOOLDEF: type_ = Type.BOOL
         
         if (return_[1] != type_): raise_error("invalid return type")
         return return_
 
 class TypeVal(Node):
+
     def __init__(self, token: Token, var_func_type: str):
         super().__init__(token, 1)
         self.var_func_type = var_func_type
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
         if self.token.type_ == Type.INTDEF: type_ = Type.INT
         elif self.token.type_ == Type.STRDEF: type_ = Type.STR
         elif self.token.type_ == Type.BOOLDEF: type_ = Type.BOOL
-        
-        if not st._get_variable(self.children[0].value, func_name): st._set_variable(self.children[0].value, None, type_, func_name, self.var_func_type)
-        else: raise_error("double definition of variable")
+
+        if self.var_func_type == "local":
+            if not st._get_variable(self.children[0].value, func_name): st._set_variable(self.children[0].value, None, type_, func_name, self.var_func_type)
+            else: raise_error("double definition of variable(s)")
+
+        else:
+            if not fst._get_variable(self.children[0].value, func_name): fst._set_variable(self.children[0].value, None, type_, func_name, self.var_func_type)
+            else: raise_error("double definition of variable")
 
 class WhileOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 2)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        while(self.children[0].evaluate(st, func_name)[0]): 
-            self.children[1].evaluate(st, func_name)
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        while(self.children[0].evaluate(fst, st, func_name)[0]): 
+            self.children[1].evaluate(fst, st, func_name)
 
 class CondOp(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 3)
             
-    ## fixme com return
-    def evaluate(self, st: SymbolTable, func_name: str): 
-        cond = self.children[0].evaluate(st, func_name)[0]
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): 
+        cond = self.children[0].evaluate(fst, st, func_name)[0]
         if type(cond) is str: raise_error("cant have str in if")
-        if cond: return self.children[1].evaluate(st, func_name)
+        if cond: return self.children[1].evaluate(fst, st, func_name)
 
         if type(self.children[2]) != NoOp:
-            if not cond: return self.children[2].evaluate(st, func_name)
+            if not cond: return self.children[2].evaluate(fst, st, func_name)
 
 class IdentVal(Node):
 
     def __init__(self, token: Token):
         super().__init__(token, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str): 
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str):
         r = st._get_variable(self.token.value, func_name)
         if not r: raise_error("key not found")
         return r
@@ -480,16 +506,18 @@ class NoOp(Node):
     def __init__(self):
         super().__init__(None, 0)
     
-    def evaluate(self, st: SymbolTable, func_name: str): return 
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str): return 
 
 class Block():
+    
     def __init__(self, tree: list):
         self.tree = tree
 
-    def evaluate(self, st: SymbolTable, func_name: str):
+    def evaluate(self, fst: FunctionSymbolTable, st: SymbolTable, func_name: str):
         for tree in self.tree:
-            r = tree.evaluate(st, func_name)
-            if r != None: return r
+            r = tree.evaluate(fst, st, func_name)
+            if r != None and not isinstance(tree, FuncCall):
+                return r
 
 class Parser:
 
@@ -874,10 +902,10 @@ def raise_error(error: str):
 
 def main(argv: str) -> int:
     trees = Parser().code(PrePro().filter(open(argv, "r").read()))
-    st = SymbolTable()
+    fst = FunctionSymbolTable()
 
     for tree in trees:
-        tree.evaluate(st, None)
+        tree.evaluate(fst, None, None)
 
     return 0
 
